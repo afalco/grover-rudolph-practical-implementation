@@ -1,0 +1,11 @@
+# requirements.txt
+# Minimal runtime requirements for this repository.
+# Pin versions only where hardware/backends are sensitive; otherwise keep flexible.
+
+numpy>=1.23
+
+# SpinQit provides Circuit/backends (simulator + NMR). Install via pip or your preferred method.
+spinqit>=0.2.2
+
+# Optional utilities (safe to remove if you don't use the scripts that write CSV/JSONL)
+pandas>=1.5
