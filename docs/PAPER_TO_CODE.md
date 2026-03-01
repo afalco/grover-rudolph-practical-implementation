@@ -56,7 +56,7 @@ This avoids ambiguity between `asin` vs `acos` conventions and prevents common â
 ## 3) Circuit construction by levels (L0 / L01 / FULL)
 
 ### Paper object
-The circuit is constructed inductively: at each level \(k\), the algorithm applies a rotation on qubit \(q_k\) conditioned on the prefix \(q_0\cdots q_{k-1}\). The proof shows that after level \(k\), the correct marginal distribution over prefixes of length \(k\) is obtained.
+The circuit is constructed inductively: at each level $k$, the algorithm applies a rotation on qubit $q_k$ conditioned on the prefix $q_0\cdots q_{k-1}$. The proof shows that after level $k$, the correct marginal distribution over prefixes of length \(k\) is obtained.
 
 ### Code mapping
 - `build_gr_circuit_3q(..., depth="L0"|"L01"|"full", ...)`
@@ -80,11 +80,8 @@ A central practical message is that the Groverâ€“Rudolph circuit can be implemen
 #### 4.1 Single-control Ry (level 1)
 - `apply_cry_1ctrl_decomp(...)` implements CRy using only Ry + CNOT:
 
-$$
-\mathrm{CR}_y(\theta)
-=
-R_y(\theta/2)\;\mathrm{CNOT}\;R_y(-\theta/2)\;\mathrm{CNOT}.
-$$
+$$\mathrm{CR}_y(\theta)=
+R_y(\theta/2)\;\mathrm{CNOT}\;R_y(-\theta/2)\;\mathrm{CNOT}.$$
 
 0-controls are handled with an X-sandwich on the control qubit.
 
