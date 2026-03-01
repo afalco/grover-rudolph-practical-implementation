@@ -106,7 +106,6 @@ Stages:
 
 ## Repository layout
 
-Recommended structure (some folders may be added progressively):
 
 ```text
 Grover-Rudolph-Practical-Implementation/
