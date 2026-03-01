@@ -106,4 +106,10 @@ Stages:
 
 ## Repository layout
 
-Recommended structure (some folders may be added progressively):
+paper/          # the paper PDF or a link-only reference
+src/
+definitive_gr.py
+gr/            # optional modularization (angles/ucry/metrics/backends/readout)
+experiments/     # focused scripts (bit order, ladder tests, staged runs)
+results/         # saved logs/csv/figures
+docs/            # LaTeX documentation and hardware notes
