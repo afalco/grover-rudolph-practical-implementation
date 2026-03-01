@@ -1,4 +1,3 @@
-```markdown
 # docs/PAPER_TO_CODE.md
 
 ## Scope
