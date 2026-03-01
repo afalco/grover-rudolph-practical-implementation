@@ -9,7 +9,7 @@ authors:
     given-names: "Daniela"
   - family-names: "Matthies"
     given-names: "Hermann G."
-repository-code: "https://github.com/<YOUR-ORG-OR-USER>/Grover-Rudolph-Practical-Implementation"
+repository-code: "https://github.com/afalco/Grover-Rudolph-Practical-Implementation"
 license: "MIT"
 keywords:
   - quantum computing
