@@ -1,0 +1,31 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "Grover–Rudolph Practical Implementation"
+type: software
+authors:
+  - family-names: "Falco"
+    given-names: "Antonio"
+  - family-names: "Falco-Pomares"
+    given-names: "Daniela"
+  - family-names: "Matthies"
+    given-names: "Hermann G."
+repository-code: "https://github.com/<YOUR-ORG-OR-USER>/Grover-Rudolph-Practical-Implementation"
+license: "MIT"
+keywords:
+  - quantum computing
+  - state preparation
+  - Grover-Rudolph
+  - NMR
+  - SpinQ Triangulum
+  - SpinQit
+references:
+  - type: article
+    title: "Grover–Rudolph Practical Implementation on a Real Quantum Device"
+    authors:
+      - family-names: "Falco"
+        given-names: "Antonio"
+      - family-names: "Falco-Pomares"
+        given-names: "Daniela"
+      - family-names: "Matthies"
+        given-names: "Hermann G."
+    url: "https://arxiv.org/abs/2601.17930"
