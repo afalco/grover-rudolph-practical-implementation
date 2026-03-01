@@ -106,10 +106,72 @@ Stages:
 
 ## Repository layout
 
-### Create the environment (Conda)
+Recommended structure (some folders may be added progressively):
 
-From the repository root:
+```text
+Grover-Rudolph-Practical-Implementation/
+  README.md
+  LICENSE
+  CITATION.cff
+
+  paper/                 # link-only reference (e.g., arXiv link + citation)
+    README.md
+
+  environment.yml
+  requirements.txt       # optional (pip fallback)
+  .gitignore
+
+  gr/                    # core library (importable package)
+    __init__.py
+    circuit.py           # build_gr_circuit_3q + staged variants
+    angles.py            # Grover–Rudolph angle tree (asin convention, etc.)
+    ucry.py              # UCRy ladder (A/B) coefficients + decompositions
+    backends.py          # simulator + NMR runners (robust retries)
+    metrics.py           # TV/L2/Fidelity + marginals
+    readout.py           # 8×8 Mfull calibration + mitigation
+    constants.py         # STATES_3Q and shared constants
+    utils.py             # small helpers (normalization, formatting)
+
+  src/                   # CLI/entry points (thin wrappers)
+    definitive_gr.py     # main runner script (SIM + optional NMR + metrics)
+
+  experiments/           # diagnostic and reproducibility scripts
+    README.md
+    00_smoke_sim_only.py
+    01_bit_order_check.py
+    02_trivial_suite.py
+    03_ladder_full_A_vs_B.py
+    04_stage_ablation_L0_L01_FULL.py
+    05_readout_calibration_8x8.py
+    06_readout_mitigation_apply.py
+    07_cx_only_stress_test.py
+    08_full_gr_log_to_csv.py
+    utils_io.py
+
+  docs/                  # documentation (human-readable)
+    HARDWARE_TRIANGULUM.md
+    UCRY_LADDER.md
+    TROUBLESHOOTING.md    # optional
+    REPRODUCIBILITY.md    # optional
+
+  artifacts/             # generated outputs (ignored by git)
+    .gitkeep
+
+  tests/                 # optional unit tests
+    test_angles.py
+    test_ucry.py
+    test_metrics.py
+
+  .github/               # optional automation
+    workflows/
+      ci.yml
+```
+
+### Create the environment
 
 ```bash
 conda env create -f environment.yml
 conda activate spinq-gr
+```
+
+
