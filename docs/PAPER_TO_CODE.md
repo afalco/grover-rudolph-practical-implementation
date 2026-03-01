@@ -25,9 +25,7 @@ $$
 ### Code mapping
 - `sum_indices_prob(p, prefix_bits)` computes \(P(\text{prefix})\) by summing over all basis indices whose MSB prefix matches `prefix_bits`.
 - Basis convention is **MSB→LSB**:
-  $$
-  |q_0 q_1 q_2\rangle \leftrightarrow \text{bitstring} b_0 b_1 b_2.
-  $$
+  $$|q_0 q_1 q_2\rangle \leftrightarrow \text{bitstring} b_0 b_1 b_2.$$
 
 ---
 
