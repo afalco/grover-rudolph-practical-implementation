@@ -14,3 +14,12 @@ From the repo root:
 
 ```bash
 python experiments/00_smoke_sim_only.py
+
+Hardware setup (SpinQ Triangulum NMR)
+```
+Hardware runs require environment variables:
+	•	SPINQ_IP
+	•	SPINQ_PORT
+	•	SPINQ_USER
+	•	SPINQ_PASS
+
