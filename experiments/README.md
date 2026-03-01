@@ -1,16 +1,16 @@
 # experiments/
 
-This folder contains reproducible experiment scripts that use the `gr/` package.
+# experiments/
 
-## Common setup
+This folder contains **reproducible experiment scripts** built on top of the `gr/` package.  
+Each script is intentionally small and single-purpose so you can isolate effects and keep a clean
+“paper → code → hardware” trace.
 
-Hardware runs require environment variables:
+---
 
-- `SPINQ_IP`, `SPINQ_PORT`, `SPINQ_USER`, `SPINQ_PASS`
+## Quick start
 
-Example (Linux/macOS):
+From the repo root:
+
 ```bash
-export SPINQ_IP="..."
-export SPINQ_PORT="..."
-export SPINQ_USER="..."
-export SPINQ_PASS="..."
+python experiments/00_smoke_sim_only.py
