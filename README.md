@@ -1,41 +1,109 @@
 # Grover–Rudolph Practical Implementation
 
-This repository provides a practical, reproducible implementation of the Grover–Rudolph state-preparation method for 3 qubits, including:
+This repository provides a **paper-to-hardware** implementation of the **Grover–Rudolph state preparation algorithm** for **3 qubits**, including:
 
-- **Ideal simulation** verification (sanity check vs target distribution)
-- **Execution on a real quantum device** (SpinQ Triangulum NMR)
-- **Staged diagnostics** (L0 / L01 / FULL)
-- **Metrics**: Total Variation (TV), L2 distance, classical fidelity
+- **Ideal simulator verification** (exact distribution matching)
+- **Execution on a real quantum device**: *SpinQ Triangulum (NMR)*
+- **Ancilla-free transpilation** into the native gate set `{Ry(·), X, CNOT}`
+- **Staged diagnostics** (L0 / L01 / FULL) to localize hardware error accumulation
+- **Metrics**: Total Variation (TV), L2 distance, and classical fidelity
 - Optional: **8×8 readout calibration and mitigation**
 
-## Reference paper
+## Reference paper (arXiv)
 
-The implementation is designed as a “paper-to-hardware” companion for:
+This codebase is intended as a practical companion to:
 
-- `paper/Grover_Rudolph_proof.pdf`
+**A Rigorous and Self–Contained Proof of the Grover–Rudolph State Preparation Algorithm**  
+arXiv:2601.17930  
+https://arxiv.org/abs/2601.17930
 
-## What the code demonstrates
+## What this repo demonstrates
 
-1. **Correctness (ideal)**  
-   The circuit prepares the target distribution exactly in an ideal simulator (TV≈0, Fidelity≈1).
+### 1) Correctness in the ideal model
+For a target distribution `p(x)` over 3-bit strings `x ∈ {0,1}^3`, Grover–Rudolph prepares the quantum state
 
-2. **Hardware compilation (ancilla-free)**  
-   The implementation avoids nested multi-controlled parametric gates by decomposing the level-2 uniformly-controlled rotation using **Ry + CX** only.
+\[
+|\psi\rangle=\sum_{x\in\{0,1\}^3}\sqrt{p(x)}\,|x\rangle.
+\]
 
-3. **Real-device behavior**  
-   We report raw and (optionally) readout-mitigated results on SpinQ Triangulum NMR, including per-stage performance.
+The script `src/definitive_gr.py` includes a **sanity check**:
+
+- **SIM FULL vs Target**: TV ≈ 0 and Fidelity ≈ 1
+
+This is the computational counterpart of the paper’s formal correctness guarantee.
+
+### 2) A hardware-friendly compilation (no nested multi-controlled parametric gates)
+Real backends may be sensitive to nested/parametric multi-controlled gates. This repository implements the key circuit-theoretic idea:
+
+- Each Grover–Rudolph “level” is a **uniformly controlled rotation** (UCRy)
+- The circuit is compiled **ancilla-free** using only **Ry + CNOT + X**
+
+This is essential for stable execution on the SpinQ Triangulum NMR device.
+
+### 3) Real-device behavior and diagnostics
+Hardware runs are reported with:
+
+- staged execution (`L0`, `L01`, `FULL`)
+- repeated runs + averaging
+- quantitative metrics + per-qubit marginals
+- optional readout mitigation via an 8×8 confusion matrix
+
+## Paper → Code mapping (precise)
+
+The following map is intended to make the repository easy to audit as a faithful implementation of arXiv:2601.17930.
+
+### A) Dyadic probability tree and conditional masses → `angles.py` / angle routines
+**Paper concept:** probability mass aggregation over dyadic prefixes, producing conditional probabilities along a binary tree.  
+**Code:** `src/definitive_gr.py` (functionality is factored in `src/gr/angles.py` if you split modules)
+- `sum_indices_prob(...)`: computes prefix masses \(P(\text{prefix})\)
+- `angles_3q_asin_child1(...)`: builds the GR angle dictionary for 3 qubits
+
+**Key implementation choice:** the **unambiguous “child=1” convention**
+\[
+\theta(\text{prefix}) = 2\arcsin\sqrt{\frac{P(\text{prefix}+1)}{P(\text{prefix})}},
+\]
+so that applying \(R_y(\theta)\) on \(|0\rangle\) yields \(P(1)=\sin^2(\theta/2)\).  
+This prevents branch/bit swaps that often arise from mixing `asin` vs `acos` conventions.
+
+---
+
+### B) Stage-by-stage GR circuit construction → `build_gr_circuit_3q(...)`
+**Paper concept:** inductive circuit construction by levels; each level rotates the next qubit conditioned on the prefix.  
+**Code:** `src/definitive_gr.py`
+- `build_gr_circuit_3q(..., depth="L0"|"L01"|"full", ...)`
+
+Stages:
+- `L0`: only the top rotation on `q0`
+- `L01`: adds level-1 controlled rotations on `q1`
+- `FULL`: adds level-2 uniformly controlled rotation on `q2`
+
+---
+
+### C) Ancilla-free transpilation to `{Ry, X, CNOT}` → `apply_cry_1ctrl_decomp` and UCRy
+**Paper concept:** uniformly controlled \(R_y\) blocks can be decomposed using Gray-code / ladder constructions and a linear transform of angles, requiring only single-qubit rotations and CNOTs.  
+**Code:** `src/definitive_gr.py`
+- Level 1 (single control):
+  - `apply_cry_1ctrl_decomp(...)`: CRy decomposition using **Ry + CNOT**
+- Level 2 (two controls):
+  - `apply_ucry_2ctrl(...)`: 2-control UCRy using only **Ry + CNOT**
+  - `ladder_sign_matrix(...)` and `ucry_coeffs_from_thetas(...)`: build and solve the ladder’s sign system \(S a=\theta\)
+
+**Why this matters:** it avoids nested `ControlledGate(ControlledGate(Ry))` patterns that can compile poorly or fail on constrained backends.
+
+---
+
+### D) Empirical hardware evaluation → NMR backend + staged tests + metrics
+**Paper motivation:** a mathematically correct algorithm must still be validated under hardware imperfections.  
+**Code:** `src/definitive_gr.py`
+- NMR execution:
+  - `run_nmr_probs_robust(...)`: retries + exponential backoff + cooldown
+  - `run_nmr_repeated_avg(...)`: averaging across repeated runs
+- Analysis:
+  - `compare(...)`: TV / L2 / Fidelity
+  - `per_qubit_marginals(...)`: marginal probabilities per qubit
+- Optional:
+  - `calibrate_readout_matrix_8x8(...)` and `mitigate_readout(...)`
 
 ## Repository layout
 
-- `src/definitive_gr.py`: main end-to-end runner (SIM + NMR + metrics)
-- `src/gr/`: reusable library modules (angles, UCRy, metrics, backends, readout)
-- `experiments/`: focused scripts for specific validations (bit order, ladder tests, staged runs)
-- `results/`: saved logs/CSVs/figures from runs
-- `docs/`: technical notes and LaTeX documentation
-
-## Installation
-
-### Option A: Conda
-```bash
-conda env create -f environment.yml
-conda activate spinq
+Recommended structure (some folders may be added progressively):
