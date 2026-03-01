@@ -106,10 +106,10 @@ Stages:
 
 ## Repository layout
 
-paper/          # the paper PDF or a link-only reference
-src/
-definitive_gr.py
-gr/            # optional modularization (angles/ucry/metrics/backends/readout)
-experiments/     # focused scripts (bit order, ladder tests, staged runs)
-results/         # saved logs/csv/figures
-docs/            # LaTeX documentation and hardware notes
+### Create the environment (Conda)
+
+From the repository root:
+
+```bash
+conda env create -f environment.yml
+conda activate spinq-gr
