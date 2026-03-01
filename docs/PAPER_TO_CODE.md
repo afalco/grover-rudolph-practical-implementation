@@ -18,9 +18,9 @@ The goal is to make the repository auditable as a faithful â€œpaper-to-hardwareâ
 ### Paper object
 The proof is organized around a **binary (dyadic) tree** over prefixes. Each node corresponds to a prefix \(b_0\cdots b_{k-1}\) and carries a **mass**
 
-\[
+$$
 P(b_0\cdots b_{k-1}) = \sum_{x \in \{0,1\}^{3-k}} p(b_0\cdots b_{k-1}x).
-\]
+$$
 
 ### Code mapping
 - `sum_indices_prob(p, prefix_bits)` computes \(P(\text{prefix})\) by summing over all basis indices whose MSB prefix matches `prefix_bits`.
