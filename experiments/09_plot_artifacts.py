@@ -1,67 +1,91 @@
 # experiments/09_plot_artifacts.py
-# (pandas-free version)
+#
+# Plot artifacts from gr_log_*.jsonl produced by experiments/08_full_gr_log_to_csv.py
+#
+# - No pandas dependency (uses stdlib + numpy + matplotlib)
+# - Produces clean plots (not empty):
+#     * Boxplots by stage for TV/L2/Fidelity (SIM in blue)
+#     * Optional histograms per stage
+#     * FULL-stage summary table (CSV + LaTeX)
+#
+# Usage:
+#   python -m experiments.09_plot_artifacts --input artifacts/gr_log_YYYYMMDD-HHMMSS.jsonl
+#   python -m experiments.09_plot_artifacts --input ... --include-avg
+#   python -m experiments.09_plot_artifacts --input ... --hist
+#
+# Output (default):
+#   artifacts/gr_plot_<tag>_tv_box.png/.pdf
+#   artifacts/gr_plot_<tag>_l2_box.png/.pdf
+#   artifacts/gr_plot_<tag>_fid_box.png/.pdf
+#   artifacts/gr_summary_<tag>.csv
+#   artifacts/gr_summary_<tag>.tex
 
 from __future__ import annotations
 
 import argparse
 import csv
 import json
+import math
 import os
-from pathlib import Path
+import re
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import matplotlib.pyplot as plt
 
+# -------------------------- helpers --------------------------
 
-def _read_jsonl(path: str) -> List[Dict[str, Any]]:
-    rows: List[Dict[str, Any]] = []
-    with open(path, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            rows.append(json.loads(line))
-    return rows
+STAGES_ORDER = ["L0", "L01", "FULL"]
 
+def _norm_stage(stage: str) -> str:
+    s = str(stage).strip().upper()
+    if s == "FULL" or s == "FULL ":
+        return "FULL"
+    if s in ("L0", "L01"):
+        return s
+    # accept "full"
+    if s.lower() == "full":
+        return "FULL"
+    return s
 
-def _ensure_dir(d: str) -> None:
-    os.makedirs(d, exist_ok=True)
+def _safe_float(x: Any, default: float = float("nan")) -> float:
+    try:
+        return float(x)
+    except Exception:
+        return default
 
+def _ensure_dir(path: str) -> None:
+    os.makedirs(path, exist_ok=True)
 
-def _tag_from_input(input_path: str) -> str:
-    p = Path(input_path)
-    stem = p.stem  # gr_log_....
-    if stem.startswith("gr_log_"):
-        return stem.replace("gr_log_", "", 1)
-    return stem
+def _infer_tag(input_path: str) -> str:
+    # Prefer timestamp inside filename gr_log_YYYYMMDD-HHMMSS.jsonl
+    m = re.search(r"gr_log_(\d{8}-\d{6})", os.path.basename(input_path))
+    return m.group(1) if m else "unknown"
 
-
-def _latex_escape(s: str) -> str:
-    return (
-        s.replace("\\", "\\textbackslash{}")
-        .replace("_", "\\_")
-        .replace("%", "\\%")
-        .replace("&", "\\&")
-        .replace("#", "\\#")
-    )
-
-
-def write_summary_csv(path: str, rows: List[dict]) -> None:
+def _write_summary_csv(path: str, rows: List[Dict[str, Any]]) -> None:
     if not rows:
         return
-    _ensure_dir(str(Path(path).parent))
+    _ensure_dir(os.path.dirname(path) or ".")
     with open(path, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
         w.writeheader()
         for r in rows:
             w.writerow(r)
 
+def _latex_escape(s: str) -> str:
+    return (
+        s.replace("\\", "\\textbackslash{}")
+         .replace("_", "\\_")
+         .replace("%", "\\%")
+         .replace("&", "\\&")
+         .replace("#", "\\#")
+    )
 
-def write_summary_tex(path: str, caption: str, label: str, rows: List[dict]) -> None:
+def _write_summary_tex(path: str, caption: str, label: str, rows: List[Dict[str, Any]]) -> None:
     if not rows:
         return
-    _ensure_dir(str(Path(path).parent))
+    _ensure_dir(os.path.dirname(path) or ".")
     lines: List[str] = []
     lines.append("\\begin{table}[t]")
     lines.append("\\centering")
@@ -81,282 +105,281 @@ def write_summary_tex(path: str, caption: str, label: str, rows: List[dict]) -> 
     lines.append(f"\\caption{{{_latex_escape(caption)}}}")
     lines.append(f"\\label{{{_latex_escape(label)}}}")
     lines.append("\\end{table}")
-    Path(path).write_text("\n".join(lines) + "\n", encoding="utf-8")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
 
+# -------------------------- parsing --------------------------
 
-def _normalize_stage(s: str) -> str:
-    s2 = str(s).strip()
-    if s2.lower() == "full":
-        return "FULL"
-    if s2.upper() in ("L0", "L01"):
-        return s2.upper()
-    return s2.upper()
+@dataclass
+class Rec:
+    backend: str          # SIM or NMR
+    stage: str            # L0/L01/FULL
+    ladder: str
+    repeats: int          # 1 for per-run, >1 for avg rows
+    readout_mitigation: bool
 
+    tv_vs_target: float
+    l2_vs_target: float
+    fid_vs_target: float
 
-def _extract_records(jsonl_rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    flat: List[Dict[str, Any]] = []
-    for obj in jsonl_rows:
-        rec = obj.get("record", None)
-        if not isinstance(rec, dict):
-            rec = obj if isinstance(obj, dict) else None
-        if not isinstance(rec, dict):
-            continue
+    tv_vs_sim: float
+    l2_vs_sim: float
+    fid_vs_sim: float
 
-        d = dict(rec)
-        d["stage"] = _normalize_stage(d.get("stage", d.get("stage_label", "")))
-        d["backend"] = str(d.get("backend", "")).upper()
-        d["ladder"] = str(d.get("ladder", "")).upper()
+    note: str = ""
 
-        # numeric coercions
-        for col in [
-            "shots", "repeats", "ridge", "mfull_cond",
-            "tv_vs_target", "l2_vs_target", "fid_vs_target",
-            "tv_vs_sim", "l2_vs_sim", "fid_vs_sim",
-        ]:
-            if col in d:
-                try:
-                    d[col] = float(d[col])
-                except Exception:
-                    d[col] = float("nan")
-
-        flat.append(d)
-
-    if not flat:
-        raise RuntimeError("No usable records found in JSONL. Expected a 'record' dict per line.")
-    return flat
-
-
-def _pick_metric_columns(which: str) -> Tuple[str, str, str]:
-    which = which.lower()
-    if which == "target":
-        return ("tv_vs_target", "l2_vs_target", "fid_vs_target")
-    if which == "sim":
-        return ("tv_vs_sim", "l2_vs_sim", "fid_vs_sim")
-    raise ValueError("which must be 'target' or 'sim'")
-
-
-def _filter(records: List[Dict[str, Any]], stage: str, backend: str) -> List[float]:
-    stage = stage.upper()
-    backend = backend.upper()
-    return [
-        float(r.get("VAL", float("nan")))
-        for r in records
-        if r.get("stage", "").upper() == stage and r.get("backend", "").upper() == backend
-    ]
-
-
-def _boxplot_by_stage(records: List[Dict[str, Any]], metric_col: str, title: str, out_png: str, out_pdf: str) -> None:
-    stages = ["L0", "L01", "FULL"]
-    backends = ["SIM", "NMR"]
-
-    data: List[List[float]] = []
-    labels: List[str] = []
-    colors: List[Optional[str]] = []
-
-    for st in stages:
-        for be in backends:
-            vals = []
-            for r in records:
-                if r.get("stage", "").upper() != st:
-                    continue
-                if r.get("backend", "").upper() != be:
-                    continue
-                v = r.get(metric_col, float("nan"))
-                if v is None:
-                    continue
-                try:
-                    fv = float(v)
-                except Exception:
-                    continue
-                if not np.isfinite(fv):
-                    continue
-                vals.append(fv)
-
-            if len(vals) == 0:
+def load_jsonl(path: str) -> List[Rec]:
+    recs: List[Rec] = []
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
                 continue
-            data.append(vals)
-            labels.append(f"{st}-{be}")
-            colors.append("blue" if be == "SIM" else None)
+            obj = json.loads(line)
+            r = obj.get("record", {})
+            recs.append(
+                Rec(
+                    backend=str(r.get("backend", "")).upper(),
+                    stage=_norm_stage(r.get("stage", "")),
+                    ladder=str(r.get("ladder", "")).upper(),
+                    repeats=int(r.get("repeats", 1)),
+                    readout_mitigation=bool(r.get("readout_mitigation", False)),
+                    tv_vs_target=_safe_float(r.get("tv_vs_target")),
+                    l2_vs_target=_safe_float(r.get("l2_vs_target")),
+                    fid_vs_target=_safe_float(r.get("fid_vs_target")),
+                    tv_vs_sim=_safe_float(r.get("tv_vs_sim")),
+                    l2_vs_sim=_safe_float(r.get("l2_vs_sim")),
+                    fid_vs_sim=_safe_float(r.get("fid_vs_sim")),
+                    note=str(obj.get("note", "")),
+                )
+            )
+    return recs
 
-    if not data:
-        print(f"[warn] No data for boxplot {metric_col}")
-        return
+# -------------------------- plotting --------------------------
 
-    plt.figure()
-    bp = plt.boxplot(data, labels=labels, patch_artist=True, showmeans=False)
-    for patch, col in zip(bp["boxes"], colors):
-        if col is not None:
-            patch.set_facecolor(col)
+def boxplot_by_stage(
+    recs: List[Rec],
+    metric_key: str,
+    out_png: str,
+    out_pdf: str,
+    include_avg: bool,
+    title: str,
+) -> None:
+    """
+    metric_key in:
+      tv_vs_target, l2_vs_target, fid_vs_target,
+      tv_vs_sim,    l2_vs_sim,    fid_vs_sim
+    """
+    # Separate SIM and NMR; keep per-run only by default
+    def select(rs: List[Rec], backend: str, stage: str) -> List[float]:
+        vals = []
+        for r in rs:
+            if r.backend != backend:
+                continue
+            if r.stage != stage:
+                continue
+            if (not include_avg) and r.repeats != 1:
+                continue
+            vals.append(getattr(r, metric_key))
+        return [v for v in vals if not (math.isnan(v) or math.isinf(v))]
 
-    plt.xticks(rotation=45, ha="right")
-    plt.title(title)
-    plt.tight_layout()
-    plt.savefig(out_png, dpi=200)
-    plt.savefig(out_pdf)
-    plt.close()
+    data_sim = [select(recs, "SIM", st) for st in STAGES_ORDER]
+    data_nmr = [select(recs, "NMR", st) for st in STAGES_ORDER]
 
+    # If SIM has only one point per stage, boxplot looks weird; we draw it as a scatter.
+    fig = plt.figure()
+    ax = plt.gca()
 
-def _hist_full(records: List[Dict[str, Any]], metric_col: str, title: str, out_png: str, out_pdf: str) -> None:
-    sim = []
-    nmr = []
-    for r in records:
-        if r.get("stage", "").upper() != "FULL":
+    positions_sim = [1, 3, 5]
+    positions_nmr = [2, 4, 6]
+
+    # NMR boxplots
+    bp = ax.boxplot(
+        data_nmr,
+        positions=positions_nmr,
+        widths=0.7,
+        patch_artist=True,
+        showfliers=True,
+    )
+    # keep default colors; just set light facecolor for readability
+    for patch in bp["boxes"]:
+        patch.set_alpha(0.35)
+
+    # SIM points (blue)
+    for x, vals in zip(positions_sim, data_sim):
+        if len(vals) == 0:
             continue
-        v = r.get(metric_col, float("nan"))
-        try:
-            fv = float(v)
-        except Exception:
-            continue
-        if not np.isfinite(fv):
-            continue
-        if r.get("backend", "").upper() == "SIM":
-            sim.append(fv)
-        elif r.get("backend", "").upper() == "NMR":
-            nmr.append(fv)
+        # plot as points with small jitter
+        jitter = np.linspace(-0.08, 0.08, num=len(vals)) if len(vals) > 1 else [0.0]
+        ax.scatter([x + j for j in jitter], vals, marker="o", s=35)
 
-    if len(sim) == 0 and len(nmr) == 0:
-        print(f"[warn] No FULL data for histogram {metric_col}")
-        return
+    ax.set_xticks([1.5, 3.5, 5.5])
+    ax.set_xticklabels(STAGES_ORDER)
+    ax.set_title(title)
+    ax.set_xlabel("Stage")
+    ax.set_ylabel(metric_key)
 
-    plt.figure()
-    if len(sim) > 0:
-        plt.hist(np.array(sim), bins="auto", alpha=0.7, label="SIM", color="blue")
-    if len(nmr) > 0:
-        plt.hist(np.array(nmr), bins="auto", alpha=0.7, label="NMR")
-    plt.title(title)
-    plt.legend()
-    plt.tight_layout()
-    plt.savefig(out_png, dpi=200)
-    plt.savefig(out_pdf)
-    plt.close()
+    # Legend proxy
+    ax.scatter([], [], marker="o", label="SIM (ideal)", color="C0")
+    ax.plot([], [], label="NMR (box)", color="C1")
+    ax.legend(loc="best")
 
+    fig.tight_layout()
+    fig.savefig(out_png, dpi=200)
+    fig.savefig(out_pdf)
+    plt.close(fig)
 
-def _mean_over(records: List[Dict[str, Any]], stage: str, backend: str, metric_col: str) -> Optional[float]:
-    vals = []
-    for r in records:
-        if r.get("stage", "").upper() != stage.upper():
-            continue
-        if r.get("backend", "").upper() != backend.upper():
-            continue
-        try:
-            v = float(r.get(metric_col, float("nan")))
-        except Exception:
-            continue
-        if np.isfinite(v):
-            vals.append(v)
-    if not vals:
-        return None
-    return float(np.mean(vals))
+def hist_by_stage(
+    recs: List[Rec],
+    metric_key: str,
+    out_png: str,
+    out_pdf: str,
+    include_avg: bool,
+    title: str,
+) -> None:
+    def select(backend: str, stage: str) -> List[float]:
+        vals = []
+        for r in recs:
+            if r.backend != backend:
+                continue
+            if r.stage != stage:
+                continue
+            if (not include_avg) and r.repeats != 1:
+                continue
+            vals.append(getattr(r, metric_key))
+        vals = [v for v in vals if not (math.isnan(v) or math.isinf(v))]
+        return vals
 
+    fig = plt.figure()
+    ax = plt.gca()
 
-def _build_full_summary(records: List[Dict[str, Any]], target_name: str, which: str) -> List[dict]:
-    out: List[dict] = []
-    tvc, l2c, fidc = _pick_metric_columns(which)
-    for be in ["SIM", "NMR"]:
-        tv = _mean_over(records, "FULL", be, tvc)
-        l2 = _mean_over(records, "FULL", be, l2c)
-        fid = _mean_over(records, "FULL", be, fidc)
-        if tv is None or l2 is None or fid is None:
-            continue
-        out.append({
-            "comparison": f"{target_name} vs {be} (FULL) — mean over records",
-            "tv": tv,
-            "l2": l2,
-            "fidelity": fid,
+    # concatenate per-stage NMR histograms; SIM shown as vertical line(s)
+    for st in STAGES_ORDER:
+        nmr_vals = select("NMR", st)
+        if nmr_vals:
+            ax.hist(nmr_vals, bins=15, alpha=0.35, label=f"NMR {st}")
+        sim_vals = select("SIM", st)
+        for v in sim_vals:
+            ax.axvline(v, linestyle="--", linewidth=1.2)
+
+    ax.set_title(title)
+    ax.set_xlabel(metric_key)
+    ax.set_ylabel("count")
+    ax.legend(loc="best")
+    fig.tight_layout()
+    fig.savefig(out_png, dpi=200)
+    fig.savefig(out_pdf)
+    plt.close(fig)
+
+# -------------------------- summary table --------------------------
+
+def build_full_summary(recs: List[Rec]) -> List[Dict[str, Any]]:
+    """
+    Produce a Viana-style FULL summary table.
+    Prefer NMR avg rows (repeats>1) if present.
+    """
+    rows: List[Dict[str, Any]] = []
+
+    def pick(backend: str, want_avg: bool) -> Optional[Rec]:
+        cand = [r for r in recs if r.backend == backend and r.stage == "FULL"]
+        if want_avg:
+            cand = [r for r in cand if r.repeats != 1]
+            # prefer explicit avg note
+            cand2 = [r for r in cand if "AVERAGE" in (r.note or "").upper()]
+            if cand2:
+                cand = cand2
+        else:
+            cand = [r for r in cand if r.repeats == 1]
+        return cand[-1] if cand else None
+
+    sim = pick("SIM", want_avg=True) or pick("SIM", want_avg=False)
+    nmr_avg = pick("NMR", want_avg=True)
+
+    if sim is not None:
+        rows.append({
+            "comparison": "Target vs SIM ideal (FULL)",
+            "tv": float(sim.tv_vs_target),
+            "l2": float(sim.l2_vs_target),
+            "fidelity": float(sim.fid_vs_target),
         })
-    return out
+    if nmr_avg is not None:
+        rows.append({
+            "comparison": "Target vs NMR raw avg (FULL)",
+            "tv": float(nmr_avg.tv_vs_target),
+            "l2": float(nmr_avg.l2_vs_target),
+            "fidelity": float(nmr_avg.fid_vs_target),
+        })
+        # If mitigation was enabled in that run, its tv_vs_target is already “final”.
+        # If you log separate mitigated/mixed rows, you can add them here similarly.
 
+    return rows
 
-def _write_metrics_csv(path: str, records: List[Dict[str, Any]]) -> None:
-    _ensure_dir(str(Path(path).parent))
-    fieldnames = sorted({k for r in records for k in r.keys()})
-    with open(path, "w", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(f, fieldnames=fieldnames)
-        w.writeheader()
-        for r in records:
-            w.writerow(r)
-
+# -------------------------- main --------------------------
 
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--input", required=True, help="Path to artifacts/gr_log_*.jsonl")
     ap.add_argument("--outdir", default="artifacts", help="Output directory (default: artifacts)")
-    ap.add_argument("--metrics_against", choices=["target", "sim"], default="target",
-                    help="Which metric set to plot: vs target or vs sim-ideal")
+    ap.add_argument("--include-avg", action="store_true", help="Include repeats>1 rows in plots")
+    ap.add_argument("--hist", action="store_true", help="Also output histograms per metric")
     args = ap.parse_args()
 
-    input_path = args.input
-    outdir = args.outdir
-    which = args.metrics_against
+    tag = _infer_tag(args.input)
+    _ensure_dir(args.outdir)
 
-    _ensure_dir(outdir)
-    tag = _tag_from_input(input_path)
+    recs = load_jsonl(args.input)
+    if not recs:
+        raise RuntimeError("No records found in JSONL.")
 
-    rows = _read_jsonl(input_path)
-    records = _extract_records(rows)
+    # Boxplots: compare vs TARGET (the ones you care about most)
+    for metric_key, short in [
+        ("tv_vs_target", "tv"),
+        ("l2_vs_target", "l2"),
+        ("fid_vs_target", "fid"),
+    ]:
+        out_png = os.path.join(args.outdir, f"gr_plot_{tag}_{short}_box.png")
+        out_pdf = os.path.join(args.outdir, f"gr_plot_{tag}_{short}_box.pdf")
+        boxplot_by_stage(
+            recs=recs,
+            metric_key=metric_key,
+            out_png=out_png,
+            out_pdf=out_pdf,
+            include_avg=args.include_avg,
+            title=f"{metric_key} by stage (SIM points in blue; NMR boxplots)",
+        )
+        print("Wrote:", out_png)
+        print("Wrote:", out_pdf)
 
-    metrics_csv = os.path.join(outdir, f"gr_metrics_{tag}.csv")
-    _write_metrics_csv(metrics_csv, records)
-    print("Saved metrics CSV:", metrics_csv)
+        if args.hist:
+            out_png_h = os.path.join(args.outdir, f"gr_plot_{tag}_{short}_hist.png")
+            out_pdf_h = os.path.join(args.outdir, f"gr_plot_{tag}_{short}_hist.pdf")
+            hist_by_stage(
+                recs=recs,
+                metric_key=metric_key,
+                out_png=out_png_h,
+                out_pdf=out_pdf_h,
+                include_avg=args.include_avg,
+                title=f"{metric_key} histograms (dashed lines = SIM)",
+            )
+            print("Wrote:", out_png_h)
+            print("Wrote:", out_pdf_h)
 
-    tv_col, l2_col, fid_col = _pick_metric_columns(which)
-
-    _boxplot_by_stage(
-        records, tv_col,
-        title=f"Total variation distance by stage (metrics vs {which})",
-        out_png=os.path.join(outdir, f"gr_boxplot_tv_{which}_{tag}.png"),
-        out_pdf=os.path.join(outdir, f"gr_boxplot_tv_{which}_{tag}.pdf"),
-    )
-    _boxplot_by_stage(
-        records, l2_col,
-        title=f"L2 distance by stage (metrics vs {which})",
-        out_png=os.path.join(outdir, f"gr_boxplot_l2_{which}_{tag}.png"),
-        out_pdf=os.path.join(outdir, f"gr_boxplot_l2_{which}_{tag}.pdf"),
-    )
-    _boxplot_by_stage(
-        records, fid_col,
-        title=f"Classical fidelity by stage (metrics vs {which})",
-        out_png=os.path.join(outdir, f"gr_boxplot_fid_{which}_{tag}.png"),
-        out_pdf=os.path.join(outdir, f"gr_boxplot_fid_{which}_{tag}.pdf"),
-    )
-
-    _hist_full(
-        records, tv_col,
-        title=f"FULL stage TV histogram (metrics vs {which})",
-        out_png=os.path.join(outdir, f"gr_hist_tv_{which}_{tag}.png"),
-        out_pdf=os.path.join(outdir, f"gr_hist_tv_{which}_{tag}.pdf"),
-    )
-    _hist_full(
-        records, l2_col,
-        title=f"FULL stage L2 histogram (metrics vs {which})",
-        out_png=os.path.join(outdir, f"gr_hist_l2_{which}_{tag}.png"),
-        out_pdf=os.path.join(outdir, f"gr_hist_l2_{which}_{tag}.pdf"),
-    )
-    _hist_full(
-        records, fid_col,
-        title=f"FULL stage Fidelity histogram (metrics vs {which})",
-        out_png=os.path.join(outdir, f"gr_hist_fid_{which}_{tag}.png"),
-        out_pdf=os.path.join(outdir, f"gr_hist_fid_{which}_{tag}.pdf"),
-    )
-
-    summary_rows = _build_full_summary(records, target_name="Target", which=which)
+    # FULL summary table (CSV + LaTeX)
+    summary_rows = build_full_summary(recs)
     if summary_rows:
-        summ_csv = os.path.join(outdir, f"gr_summary_{tag}.csv")
-        summ_tex = os.path.join(outdir, f"gr_summary_{tag}.tex")
-        write_summary_csv(summ_csv, summary_rows)
-        write_summary_tex(
-            summ_tex,
-            caption=f"Grover–Rudolph (FULL stage) summary metrics (mean over logged records, metrics vs {which}).",
+        summary_csv = os.path.join(args.outdir, f"gr_summary_{tag}.csv")
+        summary_tex = os.path.join(args.outdir, f"gr_summary_{tag}.tex")
+        _write_summary_csv(summary_csv, summary_rows)
+        _write_summary_tex(
+            summary_tex,
+            caption="Grover–Rudolph (FULL stage) summary metrics.",
             label="tab:gr_full_summary",
             rows=summary_rows,
         )
-        print("Saved summary CSV:", summ_csv)
-        print("Saved summary LaTeX:", summ_tex)
+        print("Wrote:", summary_csv)
+        print("Wrote:", summary_tex)
     else:
-        print("[warn] No FULL summary rows produced (no FULL stage records found).")
-
-    print("Done. Outputs written to:", outdir)
-
+        print("[warn] No FULL-stage rows found; no summary written.")
 
 if __name__ == "__main__":
     main()
