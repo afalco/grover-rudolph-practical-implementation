@@ -491,29 +491,12 @@ def main() -> None:
                     full_nmr_avg_mitig = avg_mitig
                     full_nmr_avg_mixed = avg_mixed
 
-    # ----------------------- WRITE FULL SUMMARY -----------------------
-    # Always produce a Viana-style summary table if we have at least SIM FULL or NMR FULL.
-    try:
-    # If experiments/ is a proper package (has __init__.py)
+        # ----------------------- WRITE FULL SUMMARY -----------------------
+    # Always produce a "Viana-style" FULL-stage summary if we have at least SIM FULL or NMR FULL.
     from experiments.utils_io import write_summary_csv, write_summary_tex
-except Exception:
-    # Fallback: import utils_io.py by path (works even if experiments is not a package)
-    try:
-        from utils_io import write_summary_csv, write_summary_tex  # when running inside experiments/
-    except Exception:
-        try:
-            # last resort: add repo root to sys.path and import experiments/utils_io.py as a module
-            import sys
-            from pathlib import Path
-            sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-            from experiments.utils_io import write_summary_csv, write_summary_tex
-        except Exception:
-            write_summary_csv = None
-            write_summary_tex = None
 
     summary_rows: List[dict] = []
 
-    # SIM FULL summary (SIM-only runs)
     if full_sim is not None:
         tv, l2, fid = tv_l2_fidelity(target, full_sim)
         summary_rows.append({
@@ -523,7 +506,6 @@ except Exception:
             "fidelity": float(fid),
         })
 
-    # NMR FULL summaries (hardware runs)
     if full_nmr_avg_raw is not None:
         tv, l2, fid = tv_l2_fidelity(target, full_nmr_avg_raw)
         summary_rows.append({
@@ -551,7 +533,7 @@ except Exception:
             "fidelity": float(fid),
         })
 
-    if summary_rows and (write_summary_csv is not None) and (write_summary_tex is not None):
+    if summary_rows:
         summary_csv = os.path.join(OUTDIR, f"gr_summary_{tag}.csv")
         summary_tex = os.path.join(OUTDIR, f"gr_summary_{tag}.tex")
 
@@ -565,11 +547,7 @@ except Exception:
         print("Saved FULL summary CSV:", summary_csv)
         print("Saved FULL summary LaTeX:", summary_tex)
     else:
-        if not summary_rows:
-            print("[warn] No FULL summary rows to write (did you run FULL stage?).")
-        else:
-            print("[warn] Summary writers not available. Did you add write_summary_* to experiments/utils_io.py?")
-
+        print("[warn] No FULL summary rows to write (did you run FULL stage?).")
     # ----------------------- FINAL PRINTS -----------------------
     print("Saved CSV:", out_csv)
     print("Saved JSONL:", out_jsonl)
