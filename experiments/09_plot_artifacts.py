@@ -1,27 +1,16 @@
 # experiments/09_plot_artifacts.py
-#
-# Read artifacts/gr_log_*.jsonl produced by experiments/08_full_gr_log_to_csv.py
-# and generate:
-#   - artifacts/gr_metrics_<tag>.csv       (flat per-record metrics for stats)
-#   - artifacts/gr_summary_<tag>.csv/.tex  ("Viana-style" summary table; FULL stage)
-#   - artifacts/gr_boxplot_*_<tag>.png/.pdf  (TV/L2/Fidelity boxplots by stage)
-#   - artifacts/gr_hist_*_<tag>.png/.pdf     (histograms for FULL stage metrics)
-#
-# Notes:
-# - JSONL lines are expected to have at least: {"record": {...}, ...}
-# - We use matplotlib (no seaborn).
-# - SIM boxplots are colored BLUE.
+# (pandas-free version)
 
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
 
 
@@ -51,10 +40,10 @@ def _tag_from_input(input_path: str) -> str:
 def _latex_escape(s: str) -> str:
     return (
         s.replace("\\", "\\textbackslash{}")
-         .replace("_", "\\_")
-         .replace("%", "\\%")
-         .replace("&", "\\&")
-         .replace("#", "\\#")
+        .replace("_", "\\_")
+        .replace("%", "\\%")
+        .replace("&", "\\&")
+        .replace("#", "\\#")
     )
 
 
@@ -62,7 +51,11 @@ def write_summary_csv(path: str, rows: List[dict]) -> None:
     if not rows:
         return
     _ensure_dir(str(Path(path).parent))
-    pd.DataFrame(rows).to_csv(path, index=False)
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
+        w.writeheader()
+        for r in rows:
+            w.writerow(r)
 
 
 def write_summary_tex(path: str, caption: str, label: str, rows: List[dict]) -> None:
@@ -100,7 +93,7 @@ def _normalize_stage(s: str) -> str:
     return s2.upper()
 
 
-def _extract_records(jsonl_rows: List[Dict[str, Any]]) -> pd.DataFrame:
+def _extract_records(jsonl_rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     flat: List[Dict[str, Any]] = []
     for obj in jsonl_rows:
         rec = obj.get("record", None)
@@ -113,25 +106,27 @@ def _extract_records(jsonl_rows: List[Dict[str, Any]]) -> pd.DataFrame:
         d["stage"] = _normalize_stage(d.get("stage", d.get("stage_label", "")))
         d["backend"] = str(d.get("backend", "")).upper()
         d["ladder"] = str(d.get("ladder", "")).upper()
+
+        # numeric coercions
+        for col in [
+            "shots", "repeats", "ridge", "mfull_cond",
+            "tv_vs_target", "l2_vs_target", "fid_vs_target",
+            "tv_vs_sim", "l2_vs_sim", "fid_vs_sim",
+        ]:
+            if col in d:
+                try:
+                    d[col] = float(d[col])
+                except Exception:
+                    d[col] = float("nan")
+
         flat.append(d)
 
     if not flat:
         raise RuntimeError("No usable records found in JSONL. Expected a 'record' dict per line.")
-
-    df = pd.DataFrame(flat)
-
-    for col in [
-        "shots", "repeats", "ridge", "mfull_cond",
-        "tv_vs_target", "l2_vs_target", "fid_vs_target",
-        "tv_vs_sim", "l2_vs_sim", "fid_vs_sim",
-    ]:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors="coerce")
-
-    return df
+    return flat
 
 
-def _pick_metric_columns(df: pd.DataFrame, which: str) -> Tuple[str, str, str]:
+def _pick_metric_columns(which: str) -> Tuple[str, str, str]:
     which = which.lower()
     if which == "target":
         return ("tv_vs_target", "l2_vs_target", "fid_vs_target")
@@ -140,7 +135,17 @@ def _pick_metric_columns(df: pd.DataFrame, which: str) -> Tuple[str, str, str]:
     raise ValueError("which must be 'target' or 'sim'")
 
 
-def _boxplot_by_stage(df: pd.DataFrame, metric_col: str, title: str, out_png: str, out_pdf: str) -> None:
+def _filter(records: List[Dict[str, Any]], stage: str, backend: str) -> List[float]:
+    stage = stage.upper()
+    backend = backend.upper()
+    return [
+        float(r.get("VAL", float("nan")))
+        for r in records
+        if r.get("stage", "").upper() == stage and r.get("backend", "").upper() == backend
+    ]
+
+
+def _boxplot_by_stage(records: List[Dict[str, Any]], metric_col: str, title: str, out_png: str, out_pdf: str) -> None:
     stages = ["L0", "L01", "FULL"]
     backends = ["SIM", "NMR"]
 
@@ -150,8 +155,23 @@ def _boxplot_by_stage(df: pd.DataFrame, metric_col: str, title: str, out_png: st
 
     for st in stages:
         for be in backends:
-            sel = df[(df["stage"] == st) & (df["backend"] == be)]
-            vals = sel[metric_col].dropna().tolist() if metric_col in sel.columns else []
+            vals = []
+            for r in records:
+                if r.get("stage", "").upper() != st:
+                    continue
+                if r.get("backend", "").upper() != be:
+                    continue
+                v = r.get(metric_col, float("nan"))
+                if v is None:
+                    continue
+                try:
+                    fv = float(v)
+                except Exception:
+                    continue
+                if not np.isfinite(fv):
+                    continue
+                vals.append(fv)
+
             if len(vals) == 0:
                 continue
             data.append(vals)
@@ -176,24 +196,33 @@ def _boxplot_by_stage(df: pd.DataFrame, metric_col: str, title: str, out_png: st
     plt.close()
 
 
-def _hist_full(df: pd.DataFrame, metric_col: str, title: str, out_png: str, out_pdf: str) -> None:
-    full = df[df["stage"] == "FULL"]
-    if full.empty or metric_col not in full.columns:
+def _hist_full(records: List[Dict[str, Any]], metric_col: str, title: str, out_png: str, out_pdf: str) -> None:
+    sim = []
+    nmr = []
+    for r in records:
+        if r.get("stage", "").upper() != "FULL":
+            continue
+        v = r.get(metric_col, float("nan"))
+        try:
+            fv = float(v)
+        except Exception:
+            continue
+        if not np.isfinite(fv):
+            continue
+        if r.get("backend", "").upper() == "SIM":
+            sim.append(fv)
+        elif r.get("backend", "").upper() == "NMR":
+            nmr.append(fv)
+
+    if len(sim) == 0 and len(nmr) == 0:
         print(f"[warn] No FULL data for histogram {metric_col}")
         return
 
-    sim = full[full["backend"] == "SIM"][metric_col].dropna().to_numpy()
-    nmr = full[full["backend"] == "NMR"][metric_col].dropna().to_numpy()
-
-    if sim.size == 0 and nmr.size == 0:
-        print(f"[warn] No FULL data values for histogram {metric_col}")
-        return
-
     plt.figure()
-    if sim.size > 0:
-        plt.hist(sim, bins="auto", alpha=0.7, label="SIM", color="blue")
-    if nmr.size > 0:
-        plt.hist(nmr, bins="auto", alpha=0.7, label="NMR")
+    if len(sim) > 0:
+        plt.hist(np.array(sim), bins="auto", alpha=0.7, label="SIM", color="blue")
+    if len(nmr) > 0:
+        plt.hist(np.array(nmr), bins="auto", alpha=0.7, label="NMR")
     plt.title(title)
     plt.legend()
     plt.tight_layout()
@@ -202,21 +231,33 @@ def _hist_full(df: pd.DataFrame, metric_col: str, title: str, out_png: str, out_
     plt.close()
 
 
-def _build_full_summary(df: pd.DataFrame, target_name: str, which: str) -> List[dict]:
-    out: List[dict] = []
-    full = df[df["stage"] == "FULL"].copy()
-    if full.empty:
-        return out
-
-    tvc, l2c, fidc = _pick_metric_columns(df, which)
-
-    for be in ["SIM", "NMR"]:
-        sel = full[full["backend"] == be]
-        if sel.empty or tvc not in sel.columns:
+def _mean_over(records: List[Dict[str, Any]], stage: str, backend: str, metric_col: str) -> Optional[float]:
+    vals = []
+    for r in records:
+        if r.get("stage", "").upper() != stage.upper():
             continue
-        tv = float(sel[tvc].dropna().mean())
-        l2 = float(sel[l2c].dropna().mean())
-        fid = float(sel[fidc].dropna().mean())
+        if r.get("backend", "").upper() != backend.upper():
+            continue
+        try:
+            v = float(r.get(metric_col, float("nan")))
+        except Exception:
+            continue
+        if np.isfinite(v):
+            vals.append(v)
+    if not vals:
+        return None
+    return float(np.mean(vals))
+
+
+def _build_full_summary(records: List[Dict[str, Any]], target_name: str, which: str) -> List[dict]:
+    out: List[dict] = []
+    tvc, l2c, fidc = _pick_metric_columns(which)
+    for be in ["SIM", "NMR"]:
+        tv = _mean_over(records, "FULL", be, tvc)
+        l2 = _mean_over(records, "FULL", be, l2c)
+        fid = _mean_over(records, "FULL", be, fidc)
+        if tv is None or l2 is None or fid is None:
+            continue
         out.append({
             "comparison": f"{target_name} vs {be} (FULL) — mean over records",
             "tv": tv,
@@ -224,6 +265,16 @@ def _build_full_summary(df: pd.DataFrame, target_name: str, which: str) -> List[
             "fidelity": fid,
         })
     return out
+
+
+def _write_metrics_csv(path: str, records: List[Dict[str, Any]]) -> None:
+    _ensure_dir(str(Path(path).parent))
+    fieldnames = sorted({k for r in records for k in r.keys()})
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=fieldnames)
+        w.writeheader()
+        for r in records:
+            w.writerow(r)
 
 
 def main() -> None:
@@ -242,53 +293,53 @@ def main() -> None:
     tag = _tag_from_input(input_path)
 
     rows = _read_jsonl(input_path)
-    df = _extract_records(rows)
+    records = _extract_records(rows)
 
     metrics_csv = os.path.join(outdir, f"gr_metrics_{tag}.csv")
-    df.to_csv(metrics_csv, index=False)
+    _write_metrics_csv(metrics_csv, records)
     print("Saved metrics CSV:", metrics_csv)
 
-    tv_col, l2_col, fid_col = _pick_metric_columns(df, which)
+    tv_col, l2_col, fid_col = _pick_metric_columns(which)
 
     _boxplot_by_stage(
-        df, tv_col,
+        records, tv_col,
         title=f"Total variation distance by stage (metrics vs {which})",
         out_png=os.path.join(outdir, f"gr_boxplot_tv_{which}_{tag}.png"),
         out_pdf=os.path.join(outdir, f"gr_boxplot_tv_{which}_{tag}.pdf"),
     )
     _boxplot_by_stage(
-        df, l2_col,
+        records, l2_col,
         title=f"L2 distance by stage (metrics vs {which})",
         out_png=os.path.join(outdir, f"gr_boxplot_l2_{which}_{tag}.png"),
         out_pdf=os.path.join(outdir, f"gr_boxplot_l2_{which}_{tag}.pdf"),
     )
     _boxplot_by_stage(
-        df, fid_col,
+        records, fid_col,
         title=f"Classical fidelity by stage (metrics vs {which})",
         out_png=os.path.join(outdir, f"gr_boxplot_fid_{which}_{tag}.png"),
         out_pdf=os.path.join(outdir, f"gr_boxplot_fid_{which}_{tag}.pdf"),
     )
 
     _hist_full(
-        df, tv_col,
+        records, tv_col,
         title=f"FULL stage TV histogram (metrics vs {which})",
         out_png=os.path.join(outdir, f"gr_hist_tv_{which}_{tag}.png"),
         out_pdf=os.path.join(outdir, f"gr_hist_tv_{which}_{tag}.pdf"),
     )
     _hist_full(
-        df, l2_col,
+        records, l2_col,
         title=f"FULL stage L2 histogram (metrics vs {which})",
         out_png=os.path.join(outdir, f"gr_hist_l2_{which}_{tag}.png"),
         out_pdf=os.path.join(outdir, f"gr_hist_l2_{which}_{tag}.pdf"),
     )
     _hist_full(
-        df, fid_col,
+        records, fid_col,
         title=f"FULL stage Fidelity histogram (metrics vs {which})",
         out_png=os.path.join(outdir, f"gr_hist_fid_{which}_{tag}.png"),
         out_pdf=os.path.join(outdir, f"gr_hist_fid_{which}_{tag}.pdf"),
     )
 
-    summary_rows = _build_full_summary(df, target_name="Target", which=which)
+    summary_rows = _build_full_summary(records, target_name="Target", which=which)
     if summary_rows:
         summ_csv = os.path.join(outdir, f"gr_summary_{tag}.csv")
         summ_tex = os.path.join(outdir, f"gr_summary_{tag}.tex")
