@@ -494,10 +494,22 @@ def main() -> None:
     # ----------------------- WRITE FULL SUMMARY -----------------------
     # Always produce a Viana-style summary table if we have at least SIM FULL or NMR FULL.
     try:
-        from experiments.utils_io import write_summary_csv, write_summary_tex
+    # If experiments/ is a proper package (has __init__.py)
+    from experiments.utils_io import write_summary_csv, write_summary_tex
+except Exception:
+    # Fallback: import utils_io.py by path (works even if experiments is not a package)
+    try:
+        from utils_io import write_summary_csv, write_summary_tex  # when running inside experiments/
     except Exception:
-        write_summary_csv = None
-        write_summary_tex = None
+        try:
+            # last resort: add repo root to sys.path and import experiments/utils_io.py as a module
+            import sys
+            from pathlib import Path
+            sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+            from experiments.utils_io import write_summary_csv, write_summary_tex
+        except Exception:
+            write_summary_csv = None
+            write_summary_tex = None
 
     summary_rows: List[dict] = []
 
