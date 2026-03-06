@@ -1,6 +1,15 @@
 # experiments/01_bit_order_check.py
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+# Make "gr/" importable even if this script is launched from inside "experiments/".
+try:
+    import gr  # noqa: F401
+except ModuleNotFoundError:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 from spinqit import Circuit, X
 
 from gr import (
