@@ -23,14 +23,15 @@ import time
 from dataclasses import dataclass, asdict
 from typing import Dict, List, Optional, Tuple
 
-import numpy as np
 import sys
 from pathlib import Path
-
+# Make "gr/" importable even if this script is launched from inside "experiments/".
 try:
     import gr  # noqa: F401
 except ModuleNotFoundError:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+import numpy as np
 
 from gr import (
     STATES_3Q,
