@@ -24,6 +24,13 @@ from dataclasses import dataclass, asdict
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
+import sys
+from pathlib import Path
+
+try:
+    import gr  # noqa: F401
+except ModuleNotFoundError:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from gr import (
     STATES_3Q,
