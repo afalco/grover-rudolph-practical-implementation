@@ -308,6 +308,7 @@ def main() -> None:
         print("Done. Condition number:", mcond)
 
     # For the summary (FULL stage only)
+    full_sim: Optional[Dict[str, float]] = None
     full_nmr_avg_raw: Optional[Dict[str, float]] = None
     full_nmr_avg_mitig: Optional[Dict[str, float]] = None
     full_nmr_avg_mixed: Optional[Dict[str, float]] = None
@@ -359,6 +360,10 @@ def main() -> None:
                     "probs_mitig": None,
                 })
 
+                # Capture SIM FULL for the summary
+                if stage.lower() == "full":
+                    full_sim = sim_ref
+
             # NMR runs for this stage
             if RUN_NMR:
                 if sim_ref is None:
@@ -368,6 +373,9 @@ def main() -> None:
                         depth=depth, ladder=UCRY_LADDER, ensure_nmr_attrs=False,
                     )
                     sim_ref = run_sim_probs(circ_sim, shots=SHOTS_SIM)
+
+                    if stage.lower() == "full" and full_sim is None:
+                        full_sim = sim_ref
 
                 circ_nmr = build_gr_circuit_3q(
                     PROB8,
@@ -483,9 +491,78 @@ def main() -> None:
                     full_nmr_avg_mitig = avg_mitig
                     full_nmr_avg_mixed = avg_mixed
 
+    # ----------------------- WRITE FULL SUMMARY -----------------------
+    # Always produce a Viana-style summary table if we have at least SIM FULL or NMR FULL.
+    try:
+        from experiments.utils_io import write_summary_csv, write_summary_tex
+    except Exception:
+        write_summary_csv = None
+        write_summary_tex = None
+
+    summary_rows: List[dict] = []
+
+    # SIM FULL summary (SIM-only runs)
+    if full_sim is not None:
+        tv, l2, fid = tv_l2_fidelity(target, full_sim)
+        summary_rows.append({
+            "comparison": "Target vs SIM ideal (FULL)",
+            "tv": float(tv),
+            "l2": float(l2),
+            "fidelity": float(fid),
+        })
+
+    # NMR FULL summaries (hardware runs)
+    if full_nmr_avg_raw is not None:
+        tv, l2, fid = tv_l2_fidelity(target, full_nmr_avg_raw)
+        summary_rows.append({
+            "comparison": "Target vs NMR raw avg (FULL)",
+            "tv": float(tv),
+            "l2": float(l2),
+            "fidelity": float(fid),
+        })
+
+    if full_nmr_avg_mitig is not None:
+        tv, l2, fid = tv_l2_fidelity(target, full_nmr_avg_mitig)
+        summary_rows.append({
+            "comparison": f"Target vs NMR mitigated (FULL, ridge={RIDGE})",
+            "tv": float(tv),
+            "l2": float(l2),
+            "fidelity": float(fid),
+        })
+
+    if full_nmr_avg_mixed is not None:
+        tv, l2, fid = tv_l2_fidelity(target, full_nmr_avg_mixed)
+        summary_rows.append({
+            "comparison": f"Target vs NMR mixed (FULL, lam={LAM_MIX})",
+            "tv": float(tv),
+            "l2": float(l2),
+            "fidelity": float(fid),
+        })
+
+    if summary_rows and (write_summary_csv is not None) and (write_summary_tex is not None):
+        summary_csv = os.path.join(OUTDIR, f"gr_summary_{tag}.csv")
+        summary_tex = os.path.join(OUTDIR, f"gr_summary_{tag}.tex")
+
+        write_summary_csv(summary_csv, summary_rows)
+        write_summary_tex(
+            summary_tex,
+            caption="Grover–Rudolph (FULL stage) summary metrics.",
+            label="tab:gr_full_summary",
+            rows=summary_rows,
+        )
+        print("Saved FULL summary CSV:", summary_csv)
+        print("Saved FULL summary LaTeX:", summary_tex)
+    else:
+        if not summary_rows:
+            print("[warn] No FULL summary rows to write (did you run FULL stage?).")
+        else:
+            print("[warn] Summary writers not available. Did you add write_summary_* to experiments/utils_io.py?")
+
+    # ----------------------- FINAL PRINTS -----------------------
     print("Saved CSV:", out_csv)
     print("Saved JSONL:", out_jsonl)
     print("Tip: JSONL contains full dicts for plotting; CSV is for tables.")
+
 
 if __name__ == "__main__":
     main()
