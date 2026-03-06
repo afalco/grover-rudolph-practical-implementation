@@ -65,3 +65,60 @@ def load_matrix(path: str) -> np.ndarray:
     if p.suffix.lower() == ".csv":
         return np.loadtxt(str(p), delimiter=",")
     raise ValueError(f"Unsupported matrix file type: {p.suffix} (expected .npy or .csv)")
+
+from typing import List
+
+def latex_escape(s: str) -> str:
+    """Minimal LaTeX escaping for common characters."""
+    return (
+        s.replace("\\", "\\textbackslash{}")
+         .replace("_", "\\_")
+         .replace("%", "\\%")
+         .replace("&", "\\&")
+         .replace("#", "\\#")
+    )
+
+
+def write_summary_csv(path: str, rows: List[dict]) -> None:
+    """
+    Write a summary table to CSV.
+    Expected keys per row: comparison, tv, l2, fidelity
+    """
+    import csv as _csv
+    _ensure_parent(path)
+    if not rows:
+        return
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        w = _csv.DictWriter(f, fieldnames=list(rows[0].keys()))
+        w.writeheader()
+        for r in rows:
+            w.writerow(r)
+
+
+def write_summary_tex(path: str, caption: str, label: str, rows: List[dict]) -> None:
+    """
+    Write a small LaTeX table with columns: Comparison, TV, L2, Fidelity.
+    Expected keys per row: comparison, tv, l2, fidelity
+    """
+    _ensure_parent(path)
+    lines: List[str] = []
+    lines.append("\\begin{table}[t]")
+    lines.append("\\centering")
+    lines.append("\\small")
+    lines.append("\\begin{tabular}{lccc}")
+    lines.append("\\hline")
+    lines.append("Comparison & TV & L2 & Fidelity \\\\")
+    lines.append("\\hline")
+    for r in rows:
+        comp = latex_escape(str(r["comparison"]))
+        tv = f"{float(r['tv']):.6g}"
+        l2 = f"{float(r['l2']):.6g}"
+        fid = f"{float(r['fidelity']):.6g}"
+        lines.append(f"{comp} & {tv} & {l2} & {fid} \\\\")
+    lines.append("\\hline")
+    lines.append("\\end{tabular}")
+    lines.append(f"\\caption{{{latex_escape(caption)}}}")
+    lines.append(f"\\label{{{latex_escape(label)}}}")
+    lines.append("\\end{table}")
+    Path(path).write_text("\n".join(lines) + "\n", encoding="utf-8")
+
