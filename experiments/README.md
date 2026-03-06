@@ -145,18 +145,21 @@ Helps detect sensitivity to entangling depth even when logical operations cancel
 08_full_gr_log_to_csv.py
 
 Full logging pipeline:
+
 	•	staged runs (L0/L01/FULL)
 	•	per-run + averaged results
 	•	optional readout mitigation
 	•	metrics vs SIM ideal and vs Target
 
 Outputs:
+
 	•	artifacts/gr_log_<timestamp>.csv (tables / summaries)
 	•	artifacts/gr_log_<timestamp>.jsonl (full records, distributions, metadata)
 
 ⸻
 
 Recommended run order
+
 	1.	00_smoke_sim_only.py (verify math + circuit in SIM)
 	2.	01_bit_order_check.py (confirm qubit/bitstring mapping)
 	3.	04_stage_ablation_L0_L01_FULL.py (staged hardware diagnostics)
@@ -167,6 +170,7 @@ Recommended run order
 ⸻
 
 Notes on stability and debugging
+
 	•	If you see intermittent NMR connection failures:
 	•	increase cooldown in gr/backends.py (or the script’s cooldown parameter)
 	•	reduce REPEATS_NMR and run multiple sessions
