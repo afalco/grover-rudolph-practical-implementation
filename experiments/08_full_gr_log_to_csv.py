@@ -532,6 +532,67 @@ def main() -> None:
         except Exception as e:
             print(f"[warn] Plot generation failed: {e}")
 
+# ---------------------------------------------------------------------
+# ALWAYS write a FULL summary table (SIM-only and/or NMR)
+# ---------------------------------------------------------------------
+from experiments.utils_io import write_summary_csv, write_summary_tex  # if you added them there
 
+def _find_row(rows, backend, stage, repeats):
+    # stage stored as "FULL" in CSV in your logger
+    for r in rows:
+        if r.get("backend") == backend and r.get("stage") == stage and int(r.get("repeats", 0)) == repeats:
+            return r
+    return None
+
+# Read back the just-written CSV
+with open(out_csv, "r", encoding="utf-8") as f:
+    reader = csv.DictReader(f)
+    all_rows = list(reader)
+
+summary_rows = []
+
+# SIM FULL (always exists when RUN_SIM=True)
+if RUN_SIM:
+    sim_full = _find_row(all_rows, backend="SIM", stage="FULL", repeats=1)
+    if sim_full is not None:
+        summary_rows.append({
+            "comparison": "Target vs SIM ideal (FULL)",
+            "tv": float(sim_full["tv_vs_target"]),
+            "l2": float(sim_full["l2_vs_target"]),
+            "fidelity": float(sim_full["fid_vs_target"]),
+        })
+
+# NMR FULL averaged (exists when RUN_NMR=True)
+if RUN_NMR:
+    nmr_full_avg = _find_row(all_rows, backend="NMR", stage="FULL", repeats=REPEATS_NMR)
+    if nmr_full_avg is not None:
+        label = "Target vs NMR raw avg (FULL)" if not DO_READOUT_MITIGATION else "Target vs NMR avg (used metrics)"
+        summary_rows.append({
+            "comparison": label,
+            "tv": float(nmr_full_avg["tv_vs_target"]),
+            "l2": float(nmr_full_avg["l2_vs_target"]),
+            "fidelity": float(nmr_full_avg["fid_vs_target"]),
+        })
+
+# If you want explicit NMR mitigated/mixed rows, only if DO_READOUT_MITIGATION=True:
+# (This requires that your logger writes separate rows for raw+mitig+mixed.
+# If it does NOT, skip this; alternatively compute and append here.)
+# For now we keep the summary consistent with what is logged.
+
+if summary_rows:
+    summary_csv = Path(OUTDIR) / f"gr_summary_{tag}.csv"
+    summary_tex = Path(OUTDIR) / f"gr_summary_{tag}.tex"
+
+    write_summary_csv(str(summary_csv), summary_rows)
+    write_summary_tex(
+        str(summary_tex),
+        caption="Grover–Rudolph (FULL stage) summary metrics.",
+        label="tab:gr_full_summary",
+        rows=summary_rows,
+    )
+    print("Saved FULL summary CSV:", summary_csv)
+    print("Saved FULL summary LaTeX:", summary_tex)
+else:
+    print("[warn] No FULL summary rows found (did you run FULL stage?).")
 if __name__ == "__main__":
     main()
