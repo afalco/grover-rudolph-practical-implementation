@@ -1,6 +1,15 @@
 # experiments/04_stage_ablation_L0_L01_FULL.py
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+# Make "gr/" importable even if this script is launched from inside "experiments/".
+try:
+    import gr  # noqa: F401
+except ModuleNotFoundError:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 from gr import (
     target_from_prob8,
     build_gr_circuit_3q,
