@@ -23,6 +23,12 @@ from .readout import (
     mitigate_readout,
 )
 
+from .ucry import (
+    ladder_sign_matrix,
+    ucry_coeffs_from_thetas,
+    apply_ucry_2ctrl,
+)
+
 __all__ = [
     "STATES_3Q",
     "NQ_3Q",
@@ -43,4 +49,7 @@ __all__ = [
     "load_nmr_credentials_from_env",
     "calibrate_readout_matrix_8x8",
     "mitigate_readout",
+    "ladder_sign_matrix",
+    "ucry_coeffs_from_thetas",
+    "apply_ucry_2ctrl",
 ]
