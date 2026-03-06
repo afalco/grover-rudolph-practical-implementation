@@ -1,6 +1,15 @@
 # experiments/05_readout_calibration_8x8.py
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+# Make "gr/" importable even if this script is launched from inside "experiments/".
+try:
+    import gr  # noqa: F401
+except ModuleNotFoundError:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 import numpy as np
 
 from gr import calibrate_readout_matrix_8x8
