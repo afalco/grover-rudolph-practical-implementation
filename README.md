@@ -22,9 +22,9 @@ https://arxiv.org/abs/2601.17930
 ### 1) Correctness in the ideal model
 For a target distribution `p(x)` over 3-bit strings `x ∈ {0,1}^3`, Grover–Rudolph prepares the quantum state
 
-\[
+$$
 |\psi\rangle=\sum_{x\in\{0,1\}^3}\sqrt{p(x)}\,|x\rangle.
-\]
+$$
 
 The script `src/definitive_gr.py` includes a **sanity check**:
 
@@ -59,10 +59,10 @@ The following map is intended to make the repository easy to audit as a faithful
 - `angles_3q_asin_child1(...)`: builds the GR angle dictionary for 3 qubits
 
 **Key implementation choice:** the **unambiguous “child=1” convention**
-\[
+$$
 \theta(\text{prefix}) = 2\arcsin\sqrt{\frac{P(\text{prefix}+1)}{P(\text{prefix})}},
-\]
-so that applying \(R_y(\theta)\) on \(|0\rangle\) yields \(P(1)=\sin^2(\theta/2)\).  
+$$
+so that applying $R_y(\theta)$ on $|0\rangle$ yields $P(1)=\sin^2(\theta/2)$.  
 This prevents branch/bit swaps that often arise from mixing `asin` vs `acos` conventions.
 
 ---
