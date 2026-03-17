@@ -11,7 +11,7 @@
 # Outputs:
 #   artifacts/gr_log_<timestamp>.csv
 #   artifacts/gr_log_<timestamp>.jsonl   (one JSON per record, full distributions)
-#   artifacts/gr_summary_<timestamp>.csv (FULL summary table, Viana-style)
+#   artifacts/gr_summary_<timestamp>.csv (FULL summary table)
 #   artifacts/gr_summary_<timestamp>.tex (LaTeX table for the same summary)
 #
 # Hardware mode requires env vars: SPINQ_IP, SPINQ_PORT, SPINQ_USER, SPINQ_PASS
@@ -492,7 +492,7 @@ def main() -> None:
                     full_nmr_avg_mixed = avg_mixed
 
         # ----------------------- WRITE FULL SUMMARY -----------------------
-    # Always produce a "Viana-style" FULL-stage summary if we have at least SIM FULL or NMR FULL.
+    # Always produce a FULL-stage summary if we have at least SIM FULL or NMR FULL.
     from experiments.utils_io import write_summary_csv, write_summary_tex
 
     summary_rows: List[dict] = []
