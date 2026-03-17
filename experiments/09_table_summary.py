@@ -1,6 +1,6 @@
 # experiments/09_table_summary.py
 #
-# Build a compact "Viana-style" summary table (CSV + LaTeX) from gr_log_*.jsonl
+# Build a compact summary table (CSV + LaTeX) from gr_log_*.jsonl
 # and plot statewise probability bar charts: Target vs SIM vs NMR (optionally mitigated/mixed),
 # plus delta bar charts (SIM-Target, NMR-Target).
 #
