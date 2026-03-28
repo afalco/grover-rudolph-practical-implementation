@@ -32,7 +32,7 @@ TASK_NAME = "GR_test_full_B_n1"
 
 # --- Optional bit-order canonicalization for comparison ---
 SIMULATOR_ORDER = "MSB"  # simulator typically returns 000..111 in MSB->LSB convention
-HARDWARE_ORDER = "LSB"   # Triangulum export may effectively be LSB->MSB
+HARDWARE_ORDER = "MSB"   # Triangulum export may effectively be LSB->MSB
 
 # --- Robust retries for NMR ---
 NMR_MAX_TRIES = 4
