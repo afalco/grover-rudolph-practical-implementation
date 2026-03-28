@@ -174,6 +174,21 @@ A pip fallback can also be used if appropriate for your setup.
 
 ## Bit-order convention
 
+### Triangulum comparison setting validated experimentally
+
+For the present Grover–Rudolph workflow, the experimentally validated comparison
+setting is:
+
+```python
+SIMULATOR_ORDER = "MSB"
+HARDWARE_ORDER = "MSB"
+```
+
+So, although a raw export can sometimes look as if it came from a reversed
+ordering, the correct effective comparison convention for this repository is
+**MSB for both simulator and hardware**.
+
+
 The canonical state ordering used throughout this repository is:
 
 - `|q0 q1 q2⟩ = 000, 001, ..., 111` (**MSB → LSB**)
@@ -190,19 +205,19 @@ This is the reference convention used for:
 In practice, the repository assumes:
 
 - the simulator is already aligned with the canonical ordering;
-- the SpinQ Triangulum NMR backend exports bitstrings effectively in reversed order.
+- the SpinQ Triangulum NMR backend is currently best interpreted directly in the canonical ordering for this workflow.
 
-Therefore, when using Triangulum hardware outputs, the measured bitstrings must be remapped back to the canonical repo order before comparison.
+Therefore, simulator and Triangulum outputs are compared directly in the same canonical repo order in this workflow.
 
 ### Backend remapping
 
 The modular backend layer supports this through the environment variable:
 
 ```bash
-export SPINQ_BITORDER=LSB->MSB
+export SPINQ_BITORDER=MSB->LSB
 ```
 
-This means that a hardware-reported bitstring is reversed before being interpreted in the canonical repository convention.
+This keeps the hardware interpretation aligned with the canonical repository convention.
 
 If needed, the identity convention can also be used:
 
@@ -212,13 +227,13 @@ export SPINQ_BITORDER=MSB->LSB
 
 ### Recommended Triangulum setting
 
-For Triangulum runs, the recommended setting is:
+For Triangulum runs in this repository, the recommended setting is:
 
 ```bash
-export SPINQ_BITORDER=LSB->MSB
+export SPINQ_BITORDER=MSB->LSB
 ```
 
-This ensures that hardware outputs are mapped consistently to the canonical ordering used everywhere else in the repository.
+This preserves the same canonical MSB ordering used everywhere else in the repository.
 
 
 
@@ -247,7 +262,7 @@ export SPINQ_IP=<TRIANGULUM_IP>
 export SPINQ_PORT=55444
 export SPINQ_ACCOUNT=<ACCOUNT>
 export SPINQ_PASSWORD=<PASSWORD>
-export SPINQ_BITORDER=LSB->MSB
+export SPINQ_BITORDER=MSB->LSB
 ```
 
 Example:
@@ -257,7 +272,7 @@ export SPINQ_IP=192.168.1.25
 export SPINQ_PORT=55444
 export SPINQ_ACCOUNT=my_user
 export SPINQ_PASSWORD='my_secret_password'
-export SPINQ_BITORDER=LSB->MSB
+export SPINQ_BITORDER=MSB->LSB
 ```
 
 You can then run the hardware workflow in the same shell session.
@@ -271,7 +286,7 @@ $env:SPINQ_IP = "<TRIANGULUM_IP>"
 $env:SPINQ_PORT = "55444"
 $env:SPINQ_ACCOUNT = "<ACCOUNT>"
 $env:SPINQ_PASSWORD = "<PASSWORD>"
-$env:SPINQ_BITORDER = "LSB->MSB"
+$env:SPINQ_BITORDER = "MSB->LSB"
 ```
 
 Example:
@@ -281,7 +296,7 @@ $env:SPINQ_IP = "192.168.1.25"
 $env:SPINQ_PORT = "55444"
 $env:SPINQ_ACCOUNT = "my_user"
 $env:SPINQ_PASSWORD = "my_secret_password"
-$env:SPINQ_BITORDER = "LSB->MSB"
+$env:SPINQ_BITORDER = "MSB->LSB"
 ```
 
 ### Temporary vs persistent variables
@@ -326,9 +341,6 @@ This utility runs simple calibration circuits with known `X` flips and reports t
 
 ## Notes
 
-The smoke-test script `gr_triangulum_smoke_test.py` already reflects the experimentally verified convention:
+The smoke-test script `gr_triangulum_smoke_test.py` should therefore be interpreted with `SIMULATOR_ORDER = "MSB"` and `HARDWARE_ORDER = "MSB"` as the experimentally validated comparison setting for this workflow.
 
-- simulator output treated as canonical,
-- hardware output treated as reversed and canonized before comparison.
-
-The recommended next step is to keep `src/definitive_gr.py` and any NMR-facing scripts aligned with the same backend remapping policy through `gr/backends.py`.
+The recommended next step is to keep `src/definitive_gr.py` and any NMR-facing scripts aligned with the same canonical MSB policy through `gr/backends.py`.
