@@ -45,10 +45,10 @@ RUN_NMR = False
 
 # Bit-order convention
 # Canonical repo order is MSB->LSB = |q0 q1 q2>.
-# Triangulum hardware has been experimentally verified to export effectively in
-# LSB->MSB order, so when running NMR we default to remapping via gr.backends
-# unless the user has explicitly overridden SPINQ_BITORDER.
-DEFAULT_NMR_BITORDER = "LSB->MSB"
+# For this Grover–Rudolph workflow, simulator and Triangulum are compared in the
+# same canonical MSB ordering, so when running NMR we keep the identity/canonical
+# interpretation unless the user has explicitly overridden SPINQ_BITORDER.
+DEFAULT_NMR_BITORDER = "MSB->LSB"
 
 SHOTS_SIM = 200_000
 SHOTS_NMR = 2048
@@ -174,7 +174,7 @@ def run_sim_probs(circ: Circuit, shots: int) -> Dict[str, float]:
 
 def ensure_nmr_bitorder_default() -> None:
     """
-    Ensure Triangulum outputs are remapped to the repo canonical order |q0 q1 q2>.
+    Ensure Triangulum outputs are interpreted in the repo canonical order |q0 q1 q2>.
     If the user already set SPINQ_BITORDER explicitly, preserve it.
     """
     if RUN_NMR and not os.environ.get("SPINQ_BITORDER"):
