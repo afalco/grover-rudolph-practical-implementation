@@ -1,24 +1,9 @@
 # experiments/
 
-Here’s a tightened, more “repo-quality” version. I kept your structure, but:
-	•	makes module-style invocation the default (avoids import issues)
-	•	clarifies hardware env vars + Windows note
-	•	adds artifacts conventions and “what to do when things go wrong”
-	•	fixes small wording and the truncated last bullet (“mitigation”)
-	•	keeps everything single-source-of-truth and actionable
-
-You can paste this as /experiments/README.md.
-
-⸻
-
-experiments/
-
-This folder contains reproducible, single-purpose experiment scripts built on top of the gr/ Python package.
+This folder contains reproducible, single-purpose experiment scripts built on top of the `gr/` Python package.
 Each script is intentionally small so you can isolate effects and maintain a clean “paper → code → hardware” trace.
 
-⸻
-
-Quick start
+## Quick start
 
 Run from the repo root.
 
@@ -34,360 +19,310 @@ Direct execution also works if you are in the repo root:
 python experiments/00_smoke_sim_only.py
 ```
 
-Import troubleshooting
+## Import troubleshooting
 
-If you see import errors (e.g., ModuleNotFoundError: gr), verify:
-	1.	You are in the repo root (the folder containing gr/ and experiments/).
-	2.	gr/__init__.py exists.
-	3.	Prefer module execution: python -m experiments.<script_name_without_py>.
+If you see import errors such as `ModuleNotFoundError: gr`, verify:
 
-⸻
+1. You are in the repo root, the folder containing `gr/` and `experiments/`.
+2. `gr/__init__.py` exists.
+3. Prefer module execution: `python -m experiments.<script_name_without_py>`.
 
-Hardware setup (SpinQ Triangulum NMR)
+## Hardware setup (SpinQ Triangulum NMR)
 
-Hardware runs require these environment variables:
-	•	SPINQ_IP
-	•	SPINQ_PORT
-	•	SPINQ_USER
-	•	SPINQ_PASS
+Hardware runs typically require these environment variables:
 
-Linux/macOS
+- `SPINQ_IP`
+- `SPINQ_PORT`
+- `SPINQ_ACCOUNT`
+- `SPINQ_PASSWORD`
+
+For backward compatibility, some older code/comments may still mention `SPINQ_USER` and `SPINQ_PASS`. In this repository, the preferred names are:
+
+- `SPINQ_ACCOUNT`
+- `SPINQ_PASSWORD`
+
+### Linux / macOS
 
 ```bash
 export SPINQ_IP="192.0.2.1"
 export SPINQ_PORT="12345"
-export SPINQ_USER="userX"
-export SPINQ_PASS="********"
+export SPINQ_ACCOUNT="userX"
+export SPINQ_PASSWORD="********"
 ```
 
-Windows PowerShell
+### Windows PowerShell
 
-```poweshell
-setx SPINQ_IP "192.0.2.1"
-setx SPINQ_PORT "12345"
-setx SPINQ_USER "userX"
-setx SPINQ_PASS "********"
+```powershell
+$env:SPINQ_IP = "192.0.2.1"
+$env:SPINQ_PORT = "12345"
+$env:SPINQ_ACCOUNT = "userX"
+$env:SPINQ_PASSWORD = "********"
 ```
 
-Restart the terminal after setx.
+## Bit-order convention
 
-RUN_NMR toggle
+For this Grover–Rudolph workflow, the experimentally validated comparison setting is:
 
-Most scripts expose a flag like:
+```python
+SIMULATOR_ORDER = "MSB"
+HARDWARE_ORDER = "MSB"
+```
 
-RUN_NMR = False  # simulation-only
-# RUN_NMR = True # enable hardware runs (requires SPINQ_* env vars)
+So the effective comparison convention is **MSB for both simulator and hardware**.
 
-	•	RUN_NMR = False → simulation-only (no hardware calls, no env vars required)
-	•	RUN_NMR = True  → hardware mode (NMR backend used, env vars required)
+That same canonical state order is used throughout the experiment scripts:
 
-⸻
+- bitstrings are interpreted as `|q0 q1 q2⟩`,
+- printed state order is always `['000','001','010','011','100','101','110','111']`,
+- target, simulator, hardware, and readout-mitigation artifacts should be interpreted in that same canonical order.
 
-Output conventions
-	•	Bitstrings are always MSB→LSB: |q0 q1 q2⟩.
-	•	Printed state order is always:
-['000','001','010','011','100','101','110','111'].
-	•	Generated outputs go to artifacts/ (CSV/JSONL/PNG/PDF depending on script).
+## Output conventions
 
-⸻
+- Generated outputs go to `artifacts/` (CSV/JSONL/PNG/PDF depending on script).
+- Readout-calibration matrices and mitigated distributions are interpreted in the same canonical state order as the rest of the repository.
+- If you compare NMR against SIM or target, do so in the canonical MSB state order used above.
 
-Scripts
+## Scripts
 
-00_smoke_sim_only.py
+### `00_smoke_sim_only.py`
 
 Sanity check: Target vs SIM FULL should yield TV ≈ 0 and Fidelity ≈ 1.
+
 Use as a pre-commit / CI guard.
 
-01_bit_order_check.py
+### `01_bit_order_check.py`
 
-Applies X to q0, q1, q2 and checks the dominant bitstring in SIM and optionally NMR.
-Confirms the convention |q0 q1 q2⟩ = MSB→LSB.
+Applies `X` to `q0`, `q1`, `q2` and checks the dominant bitstring in SIM and optionally NMR.
 
-02_trivial_suite.py
+Confirms the convention `|q0 q1 q2⟩` in canonical MSB ordering.
+
+### `02_trivial_suite.py`
 
 Minimal diagnostic circuits:
-	•	identity-safe circuit
-	•	Ry(π/2) on each qubit
-	•	Bell state on (q0,q1)
 
-Prints per-qubit marginals (useful for readout bias / crosstalk checks).
+- identity-safe circuit
+- `Ry(π/2)` on each qubit
+- Bell state on `(q0,q1)`
 
-03_ladder_full_A_vs_B.py
+Prints per-qubit marginals, useful for readout bias and crosstalk checks.
+
+### `03_ladder_full_A_vs_B.py`
 
 Runs FULL Grover–Rudolph with UCRy ladder A and B.
-Compares distributions (TV/L2/Fidelity) in SIM and optionally NMR.
 
-04_stage_ablation_L0_L01_FULL.py
+Compares distributions, TV, L2, and fidelity in SIM and optionally NMR.
 
-Runs L0, L01, FULL and reports metrics vs SIM ideal (and/or target).
+### `04_stage_ablation_L0_L01_FULL.py`
+
+Runs `L0`, `L01`, and `FULL` and reports metrics versus SIM ideal and/or target.
+
 Best first diagnostic to see at which depth performance degrades.
 
-05_readout_calibration_8x8.py
+### `05_readout_calibration_8x8.py`
 
-Calibrates the 8×8 readout confusion matrix Mfull.
-Saves (timestamped):
-	•	artifacts/Mfull_<timestamp>.npy
-	•	artifacts/Mfull_<timestamp>.csv
+Calibrates the `8×8` readout confusion matrix `Mfull`.
 
-06_readout_mitigation_apply.py
+Saves timestamped artifacts such as:
 
-Loads a saved Mfull and applies readout mitigation:
-	•	raw → mitigated (ridge-regularized inversion)
-	•	optional mixing (raw/mitigated)
+- `artifacts/Mfull_<timestamp>.npy`
+- `artifacts/Mfull_<timestamp>.csv`
 
-Prints comparisons vs Target (and/or SIM ideal).
+The matrix is indexed in the same canonical state order used across the repo.
 
-07_cx_only_stress_test.py
+### `06_readout_mitigation_apply.py`
 
-Stress test: circuits that are (ideally) identity but contain many CX operations.
+Loads a saved `Mfull` and applies readout mitigation:
+
+- raw → mitigated via ridge-regularized inversion
+- optional mixing between raw and mitigated
+
+Prints comparisons versus target and/or SIM ideal.
+
+All raw and mitigated distributions are interpreted in the same canonical state order.
+
+### `07_cx_only_stress_test.py`
+
+Stress test: circuits that are ideally identity but contain many `CX` operations.
+
 Helps detect sensitivity to entangling depth even when logical operations cancel.
 
-08_full_gr_log_to_csv.py
+### `08_full_gr_log_to_csv.py`
 
 Full logging pipeline:
 
-	•	staged runs (L0/L01/FULL)
-	•	per-run + averaged results
-	•	optional readout mitigation
-	•	metrics vs SIM ideal and vs Target
+- staged runs (`L0`, `L01`, `FULL`)
+- per-run plus averaged results
+- optional readout mitigation
+- metrics versus SIM ideal and versus target
 
 Outputs:
 
-	•	artifacts/gr_log_<timestamp>.csv (tables / summaries)
-	•	artifacts/gr_log_<timestamp>.jsonl (full records, distributions, metadata)
+- `artifacts/gr_log_<timestamp>.csv`
+- `artifacts/gr_log_<timestamp>.jsonl`
 
-⸻
+## Recommended run order
 
-Recommended run order
+1. `00_smoke_sim_only.py` — verify math and circuit in SIM
+2. `01_bit_order_check.py` — confirm qubit/bitstring mapping
+3. `04_stage_ablation_L0_L01_FULL.py` — staged hardware diagnostics
+4. `03_ladder_full_A_vs_B.py` — choose ladder A or B
+5. `05_readout_calibration_8x8.py` + `06_readout_mitigation_apply.py` — optional
+6. `08_full_gr_log_to_csv.py` — final logged runs
 
-	1.	00_smoke_sim_only.py (verify math + circuit in SIM)
-	2.	01_bit_order_check.py (confirm qubit/bitstring mapping)
-	3.	04_stage_ablation_L0_L01_FULL.py (staged hardware diagnostics)
-	4.	03_ladder_full_A_vs_B.py (choose ladder A or B)
-	5.	05_readout_calibration_8x8.py + 06_readout_mitigation_apply.py (optional)
-	6.	08_full_gr_log_to_csv.py (final logged runs)
+## Notes on stability and debugging
 
-⸻
+If you see intermittent NMR connection failures:
 
-Notes on stability and debugging
+- increase cooldown in `gr/backends.py` or the script’s cooldown parameter,
+- reduce `REPEATS_NMR` and run multiple sessions.
 
-	•	If you see intermittent NMR connection failures:
-	•	increase cooldown in gr/backends.py (or the script’s cooldown parameter)
-	•	reduce REPEATS_NMR and run multiple sessions
-	•	If FULL degrades substantially relative to L01, try:
-	•	switching UCRy ladder (03_ladder_full_A_vs_B.py)
-	•	enabling command clipping (CLIP_THETA_CMD, e.g. 0.95 * π)
-	•	recalibrating the readout matrix (05_readout_calibration_8x8.py)
-	•	applying mitigation and optionally mixing (06_readout_mitigation_apply.py)
+If `FULL` degrades substantially relative to `L01`, try:
 
-Below is a drop-in “Expected outputs” section you can append to /experiments/README.md. I’ve kept it practical: what files appear, what numbers should look like, and what deviations mean.
+- switching UCRy ladder (`03_ladder_full_A_vs_B.py`),
+- enabling command clipping (`CLIP_THETA_CMD`, e.g. `0.95 * π`),
+- recalibrating the readout matrix (`05_readout_calibration_8x8.py`),
+- applying mitigation and optionally mixing (`06_readout_mitigation_apply.py`).
 
-⸻
-
-Expected outputs (quick validation checklist)
+## Expected outputs (quick validation checklist)
 
 This section gives rough expected behavior to confirm the software stack is working end-to-end.
+
 Exact values on NMR will vary with calibration, drift, and shot noise, but the qualitative patterns should match.
 
-Common conventions
-	•	State order is always:
-['000','001','010','011','100','101','110','111']
-	•	Bitstrings are MSB→LSB: |q0 q1 q2⟩.
-	•	For TV/L2/Fidelity:
-	•	TV is in [0,1], smaller is better.
-	•	L2 is in [0,\sqrt{2}], smaller is better.
-	•	Classical fidelity is in [0,1], larger is better.
+### Common conventions
 
-⸻
+- State order is always: `['000','001','010','011','100','101','110','111']`
+- Bitstrings are MSB→LSB in the effective comparison convention used in this workflow.
+- For TV/L2/Fidelity:
+  - TV is in `[0,1]`, smaller is better.
+  - L2 is in `[0,√2]`, smaller is better.
+  - Classical fidelity is in `[0,1]`, larger is better.
 
-00_smoke_sim_only.py
+### `00_smoke_sim_only.py`
 
-Goal: validate the Grover–Rudolph math + circuit build in simulation.
+Goal: validate the Grover–Rudolph math and circuit build in simulation.
 
 Expected (SIM):
 
-	•	Target vs SIM FULL:
-	•	TV ≈ 0 (typically < 1e-9)
-	•	L2 ≈ 0
-	•	Fidelity ≈ 1
+- Target vs SIM FULL:
+  - TV ≈ 0, typically `< 1e-9`
+  - L2 ≈ 0
+  - Fidelity ≈ 1
 
-If it fails (SIM not matching target):
+If it fails:
 
-	•	angle convention mismatch (asin/acos) or wrong conditional branch
-	•	wrong bit-ordering when mapping prob8 to |q0 q1 q2⟩
-	•	bug in UCRy ladder coefficients / ordering
+- angle convention mismatch (`asin`/`acos`) or wrong conditional branch,
+- wrong bit-ordering when mapping `prob8` to `|q0 q1 q2⟩`,
+- bug in UCRy ladder coefficients or ordering.
 
-⸻
-
-01_bit_order_check.py
+### `01_bit_order_check.py`
 
 Goal: verify the mapping between qubit indices and output bitstrings.
 
 Expected (SIM):
 
-	•	X on q0 → dominant 100
-	•	X on q1 → dominant 010
-	•	X on q2 → dominant 001
+- `X` on `q0` → dominant `100`
+- `X` on `q1` → dominant `010`
+- `X` on `q2` → dominant `001`
 
 Expected (NMR):
 
-	•	same dominant bitstrings as SIM, but with leakage to other states
-	•	dominant probability often in the ~0.8–0.95 range (device-dependent)
+- same dominant bitstrings as SIM, but with leakage to other states,
+- dominant probability often in the ~0.8–0.95 range, device-dependent.
 
-If dominant states differ:
+If dominant states differ, you have a real bit-order or qubit-index mismatch in the backend labeling.
 
-	•	you have a true bit-order / qubit index mismatch in the backend labeling
-
-⸻
-
-02_trivial_suite.py
+### `02_trivial_suite.py`
 
 Goal: basic health check for readout bias and single-qubit control.
 
 Includes:
 
-	•	identity-safe circuit
-	•	Ry(π/2) on each qubit
-	•	Bell on (q0,q1)
+- identity-safe circuit
+- `Ry(π/2)` on each qubit
+- Bell on `(q0,q1)`
 
 Expected (SIM):
 
-	•	Identity → 000: 1.0
-	•	Ry(π/2) on qi → exactly 50/50 on that qubit, others fixed at 0
-	•	Bell (q0,q1) → 000: 0.5, 110: 0.5
+- Identity → `000: 1.0`
+- `Ry(π/2)` on `qi` → exactly 50/50 on that qubit, others fixed at 0
+- Bell `(q0,q1)` → `000: 0.5`, `110: 0.5`
 
 Expected (NMR):
 
-	•	Identity dominated by 000 but not exactly 1.0 (readout noise)
-	•	Ry(π/2) gives a near 50/50 marginal on that qubit (often 0.45–0.55)
-	•	Bell shows correlation (peaks at 000 and 110), but with extra mass elsewhere
+- Identity dominated by `000` but not exactly 1.0
+- `Ry(π/2)` gives a near 50/50 marginal on that qubit
+- Bell shows correlation with peaks at `000` and `110`, but with extra mass elsewhere
 
-If identity shows large population away from 000:
-
-	•	readout bias / drift; mitigate with 05_readout_calibration_8x8.py
-
-⸻
-
-03_ladder_full_A_vs_B.py
+### `03_ladder_full_A_vs_B.py`
 
 Goal: compare the two UCRy ladder orderings on the FULL circuit.
 
 Expected (SIM):
 
-	•	Ladder A and B should both match target if both implementations are correct.
-	•	If SIM differs between A and B: one ladder implementation is wrong.
+- Ladder A and B should both match target if both implementations are correct.
 
 Expected (NMR):
 
-	•	A and B can differ due to pulse scheduling / CX sensitivity.
-	•	Compare TV/L2/Fidelity vs SIM ideal (or vs target); pick the ladder that improves metrics.
+- A and B can differ due to pulse scheduling or CX sensitivity.
+- Compare TV/L2/Fidelity versus SIM ideal or target and pick the ladder that improves metrics.
 
-Output:
-
-	•	prints side-by-side distributions and metrics
-	•	optionally writes artifacts (if enabled in script)
-
-⸻
-
-04_stage_ablation_L0_L01_FULL.py
+### `04_stage_ablation_L0_L01_FULL.py`
 
 Goal: pinpoint where performance degrades as depth increases.
 
 Stages:
 
-	•	L0: only level-0 rotation on q0
-	•	L01: adds level-1 controlled rotations on q1
-	•	FULL: adds level-2 UCRy on q2
-
-Expected (SIM):
-
-	•	each stage should match its ideal stage target (by construction)
+- `L0`: only level-0 rotation on `q0`
+- `L01`: adds level-1 controlled rotations on `q1`
+- `FULL`: adds level-2 UCRy on `q2`
 
 Expected (NMR):
 
-	•	typical trend: L0 best, L01 slightly worse, FULL worst
-(but not always; depends on CX quality and ladder choice)
+- often `L0` best, `L01` slightly worse, `FULL` worst, though this is device-dependent.
 
-If FULL collapses to almost-uniform:
+### `05_readout_calibration_8x8.py`
 
-	•	strong indicator of CX/entangler sensitivity or a broken 2-control implementation
-	•	try ladder switch, clipping, and run 07_cx_only_stress_test.py
-
-⸻
-
-05_readout_calibration_8x8.py
-
-Goal: estimate the full readout confusion matrix M_{\mathrm{full}}.
-
-Outputs (timestamped):
-
-	•	artifacts/Mfull_<timestamp>.csv
-	•	artifacts/Mfull_<timestamp>.npy
+Goal: estimate the full readout confusion matrix `Mfull`.
 
 Expected:
 
-	•	diagonal entries typically largest (not necessarily close to 1.0)
-	•	cond(Mfull) should be moderate (often ~1–10; device-dependent)
-	•	too large (e.g. > 50–100) → inversion becomes unstable
+- diagonal entries typically largest,
+- `cond(Mfull)` moderate,
+- if `cond(Mfull)` is very large, inversion becomes unstable.
 
-If cond(Mfull) is huge:
-	•	increase shots, repeat calibration, or use stronger ridge in mitigation
-
-⸻
-
-06_readout_mitigation_apply.py
+### `06_readout_mitigation_apply.py`
 
 Goal: apply readout mitigation to a raw distribution.
 
 Expected:
 
-	•	mitigated distribution may reduce obvious readout bias (e.g., identity closer to 000)
-	•	but mitigation can sometimes worsen metrics if M is stale / drifting
+- mitigation may reduce obvious readout bias,
+- but may also worsen metrics if `Mfull` is stale or drift is significant.
 
-Rule of thumb:
-
-	•	if mitigation improves identity and trivial circuits but worsens deep circuits,
-the limitation is likely gate noise, not readout.
-
-⸻
-
-07_cx_only_stress_test.py
+### `07_cx_only_stress_test.py`
 
 Goal: test sensitivity to entangling depth using circuits that ideally cancel to identity.
 
 Expected (SIM):
 
-	•	output is exactly 000: 1.0
+- output exactly `000: 1.0`
 
 Expected (NMR):
 
-	•	output stays biased toward 000, but can drift with more CX layers
-	•	strong drift away from 000 indicates CX pulse imperfections accumulating
+- output remains biased toward `000`, but can drift with more CX layers.
 
-If CX-only “identity” becomes highly non-uniform:
-
-	•	CX calibration is the bottleneck; expect FULL GR to degrade too
-
-⸻
-
-08_full_gr_log_to_csv.py
+### `08_full_gr_log_to_csv.py`
 
 Goal: full logging run for paper-quality reporting.
 
-Outputs (timestamped):
-
-	•	artifacts/gr_log_<timestamp>.csv
-	•	artifacts/gr_log_<timestamp>.jsonl
-
 Expected (SIM):
 
-	•	near-perfect match to target for FULL
-	•	per-stage SIM behaves deterministically given the build
+- near-perfect match to target for FULL.
 
 Expected (NMR):
 
-	•	non-trivial deviation from SIM/target
-	•	TV often ~0.1–0.3 depending on depth and calibration
-	•	mitigation may slightly help or may not, depending on drift and M_{\mathrm{full}}
+- non-trivial deviation from SIM/target,
+- mitigation may slightly help or may not, depending on drift and `Mfull`.
 
 Tip: prefer averaging across repeats and reporting mean ± std from the CSV.
