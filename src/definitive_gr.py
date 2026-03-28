@@ -21,14 +21,16 @@
 
 import os
 import math
-import time
-import random
 from typing import Dict, List, Tuple, Optional
 
 import numpy as np
 
-from spinqit import Circuit, X, Ry, CX, get_compiler, NMRConfig
-from spinqit import get_basic_simulator, BasicSimulatorConfig
+from spinqit import Circuit, X, Ry, CX
+
+from gr.backends import (
+    run_sim_probs as gr_run_sim_probs,
+    run_nmr_probs_robust as gr_run_nmr_probs_robust,
+)
 
 # ===================== USER CONFIG =====================
 
@@ -40,6 +42,13 @@ RUN_SIM = True
 # RUN_NMR = False  -> simulation-only mode (no hardware connection, no SPINQ_* needed)
 # RUN_NMR = True   -> hardware mode (runs on SpinQ Triangulum NMR; requires SPINQ_IP/PORT/USER/PASS)
 RUN_NMR = False       
+
+# Bit-order convention
+# Canonical repo order is MSB->LSB = |q0 q1 q2>.
+# Triangulum hardware has been experimentally verified to export effectively in
+# LSB->MSB order, so when running NMR we default to remapping via gr.backends
+# unless the user has explicitly overridden SPINQ_BITORDER.
+DEFAULT_NMR_BITORDER = "LSB->MSB"
 
 SHOTS_SIM = 200_000
 SHOTS_NMR = 2048
@@ -158,94 +167,32 @@ def add_identity_safe_tail(circ: Circuit, q):
 # --------------------- Simulator execution ---------------------
 
 def run_sim_probs(circ: Circuit, shots: int) -> Dict[str, float]:
-    comp = get_compiler("native")
-    exe = comp.compile(circ, 0)
-    sim = get_basic_simulator()
-    cfg = BasicSimulatorConfig()
-    cfg.configure_shots(shots)
-    res = sim.execute(exe, cfg)
-    out = getattr(res, "probabilities", None) or getattr(res, "counts", None)
-    if out is None or len(out) == 0:
-        raise RuntimeError("Simulator returned empty probabilities/counts.")
-    probs = {k: float(out.get(k, 0.0)) for k in STATES}
-    return normalize_dict(probs)
+    return gr_run_sim_probs(circ, shots=shots)
 
 
 # --------------------- NMR execution (env vars, robust) ---------------------
 
-def _get_nmr_backend():
-    from spinqit import get_nmr
-    return get_nmr()
+def ensure_nmr_bitorder_default() -> None:
+    """
+    Ensure Triangulum outputs are remapped to the repo canonical order |q0 q1 q2>.
+    If the user already set SPINQ_BITORDER explicitly, preserve it.
+    """
+    if RUN_NMR and not os.environ.get("SPINQ_BITORDER"):
+        os.environ["SPINQ_BITORDER"] = DEFAULT_NMR_BITORDER
 
-def _nmr_env(var: str) -> Optional[str]:
-    v = os.environ.get(var, None)
-    if v is None:
-        return None
-    v = str(v).strip()
-    return v if v else None
-
-def _load_nmr_credentials() -> Tuple[str, int, str, str]:
-    ip = _nmr_env("SPINQ_IP")
-    port_s = _nmr_env("SPINQ_PORT")
-    user = _nmr_env("SPINQ_USER")
-    pw = _nmr_env("SPINQ_PASS")
-
-    missing = [k for k, v in [("SPINQ_IP", ip), ("SPINQ_PORT", port_s), ("SPINQ_USER", user), ("SPINQ_PASS", pw)] if not v]
-    if missing:
-        raise RuntimeError(
-            "Missing NMR configuration in environment variables: "
-            + ", ".join(missing)
-            + "\nSet them before running with RUN_NMR=True."
-        )
-    try:
-        port = int(port_s)  # type: ignore[arg-type]
-    except Exception as e:
-        raise RuntimeError(f"SPINQ_PORT must be an integer, got '{port_s}'.") from e
-    return ip, port, user, pw  # type: ignore[return-value]
-
-def _make_nmr_config(shots: int, name: str) -> NMRConfig:
-    ip, port, user, pw = _load_nmr_credentials()
-    cfg = NMRConfig()
-    cfg.configure_shots(shots)
-    cfg.configure_ip(ip)
-    cfg.configure_port(port)
-    cfg.configure_account(user, pw)
-    cfg.configure_task(name, name)
-    return cfg
 
 def run_nmr_probs_robust(circ: Circuit, name: str, shots: int) -> Dict[str, float]:
-    comp = get_compiler("native")
-    exe = comp.compile(circ, 0)
+    ensure_nmr_bitorder_default()
+    return gr_run_nmr_probs_robust(
+        circ,
+        name=name,
+        shots=shots,
+        max_tries=NMR_MAX_TRIES,
+        base_sleep=NMR_BASE_SLEEP,
+        jitter=NMR_JITTER,
+        cooldown_s=COOLDOWN_S,
+    )
 
-    last_err: Optional[Exception] = None
-    for attempt in range(1, NMR_MAX_TRIES + 1):
-        try:
-            eng = _get_nmr_backend()
-            cfg = _make_nmr_config(shots, name)
-            res = eng.execute(exe, cfg)
-
-            out = getattr(res, "probabilities", None) or getattr(res, "counts", None)
-            if out is None or len(out) == 0:
-                raise RuntimeError("NMR returned empty probabilities/counts.")
-
-            probs = {k: float(out.get(k, 0.0)) for k in STATES}
-            probs = normalize_dict(probs)
-
-            if COOLDOWN_S > 0:
-                time.sleep(COOLDOWN_S)
-            return probs
-
-        except Exception as e:
-            last_err = e
-            sleep_s = NMR_BASE_SLEEP * (2 ** (attempt - 1))
-            sleep_s *= (1.0 + random.uniform(-NMR_JITTER, NMR_JITTER))
-            sleep_s = max(0.5, sleep_s)
-            print(f"[NMR] attempt {attempt}/{NMR_MAX_TRIES} failed for '{name}': {e}")
-            if attempt < NMR_MAX_TRIES:
-                print(f"[NMR] sleeping {sleep_s:.2f}s then retrying...")
-                time.sleep(sleep_s)
-
-    raise RuntimeError(f"NMR job '{name}' failed after {NMR_MAX_TRIES} attempts. Last error: {last_err}")
 
 def run_nmr_repeated_avg(circ: Circuit, base_name: str, shots: int, repeats: int) -> Dict[str, float]:
     outs = []
@@ -515,6 +462,9 @@ def run_stage(depth: str, k_gain: List[float], ladder: str, target_ref: Dict[str
 
 
 def main():
+    ensure_nmr_bitorder_default()
+    if RUN_NMR:
+        print(f"[bitorder] Using SPINQ_BITORDER={os.environ.get('SPINQ_BITORDER')}")
     target = target_from_prob8(PROB8)
     print_distribution("Target distribution (normalized)", target)
     print_marginals("Target", target)
