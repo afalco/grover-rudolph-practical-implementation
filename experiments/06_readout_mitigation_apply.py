@@ -39,6 +39,14 @@ LAM_MIX = 0.3
 
 ARTIFACTS_DIR = Path("artifacts")
 
+# Convention note:
+# Raw, simulated, and mitigated distributions are all interpreted in the same
+# canonical state order used throughout this repository:
+#   ['000', '001', '010', '011', '100', '101', '110', '111']
+# In this workflow, the effective comparison convention is MSB for both
+# simulator and hardware.
+
+
 
 def mix(raw: dict, mitig: dict, lam: float) -> dict:
     keys = raw.keys()
