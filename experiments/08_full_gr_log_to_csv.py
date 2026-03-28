@@ -14,7 +14,9 @@
 #   artifacts/gr_summary_<timestamp>.csv (FULL summary table)
 #   artifacts/gr_summary_<timestamp>.tex (LaTeX table for the same summary)
 #
-# Hardware mode requires env vars: SPINQ_IP, SPINQ_PORT, SPINQ_USER, SPINQ_PASS
+# Hardware mode requires env vars: SPINQ_IP, SPINQ_PORT, SPINQ_ACCOUNT, SPINQ_PASSWORD
+# Preferred naming in this repository is SPINQ_ACCOUNT / SPINQ_PASSWORD.
+# If older local workflows still use SPINQ_USER / SPINQ_PASS, align them before running.
 
 from __future__ import annotations
 
@@ -47,6 +49,14 @@ from gr import (
     calibrate_readout_matrix_8x8,
     mitigate_readout,
 )
+
+
+# State-order convention:
+# All target, simulator, NMR, and mitigated distributions are interpreted in the
+# canonical state order:
+#   ['000', '001', '010', '011', '100', '101', '110', '111']
+# For this workflow, the experimentally validated effective comparison convention
+# is MSB for both simulator and hardware.
 
 # ----------------------- CONFIG -----------------------
 
