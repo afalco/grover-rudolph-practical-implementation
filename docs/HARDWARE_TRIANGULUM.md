@@ -33,23 +33,32 @@ This is the reference convention used for:
 
 ### 1.2 Simulator vs Triangulum hardware
 
+For the present Grover–Rudolph workflow, the experimentally validated comparison
+setting is:
+
+```python
+SIMULATOR_ORDER = "MSB"
+HARDWARE_ORDER = "MSB"
+```
+
+
 Operationally, the repository assumes:
 
 - the simulator is already aligned with the canonical ordering;
-- the SpinQ Triangulum backend exports bitstrings effectively in the reversed order.
+- the SpinQ Triangulum backend is currently best interpreted directly in the canonical ordering for this workflow.
 
-So, for Triangulum hardware, measured bitstrings should be **remapped from `LSB->MSB` back to the canonical repo order** before comparison.
+So, for Triangulum hardware in this workflow, measured bitstrings should be compared directly in the same canonical repo order used for simulation.
 
 The recommended backend setting is therefore:
 
 ```bash
-export SPINQ_BITORDER=LSB->MSB
+export SPINQ_BITORDER=MSB->LSB
 ```
 
 In PowerShell:
 
 ```powershell
-$env:SPINQ_BITORDER = "LSB->MSB"
+$env:SPINQ_BITORDER = "MSB->LSB"
 ```
 
 ### 1.3 How to validate the bit order on hardware
@@ -107,7 +116,7 @@ export SPINQ_IP=<TRIANGULUM_IP>
 export SPINQ_PORT=55444
 export SPINQ_ACCOUNT=<ACCOUNT>
 export SPINQ_PASSWORD=<PASSWORD>
-export SPINQ_BITORDER=LSB->MSB
+export SPINQ_BITORDER=MSB->LSB
 ```
 
 Example:
@@ -117,7 +126,7 @@ export SPINQ_IP=192.168.1.25
 export SPINQ_PORT=55444
 export SPINQ_ACCOUNT=my_user
 export SPINQ_PASSWORD='my_secret_password'
-export SPINQ_BITORDER=LSB->MSB
+export SPINQ_BITORDER=MSB->LSB
 ```
 
 ### 2.2 PowerShell
@@ -127,7 +136,7 @@ $env:SPINQ_IP = "<TRIANGULUM_IP>"
 $env:SPINQ_PORT = "55444"
 $env:SPINQ_ACCOUNT = "<ACCOUNT>"
 $env:SPINQ_PASSWORD = "<PASSWORD>"
-$env:SPINQ_BITORDER = "LSB->MSB"
+$env:SPINQ_BITORDER = "MSB->LSB"
 ```
 
 Example:
@@ -137,7 +146,7 @@ $env:SPINQ_IP = "192.168.1.25"
 $env:SPINQ_PORT = "55444"
 $env:SPINQ_ACCOUNT = "my_user"
 $env:SPINQ_PASSWORD = "my_secret_password"
-$env:SPINQ_BITORDER = "LSB->MSB"
+$env:SPINQ_BITORDER = "MSB->LSB"
 ```
 
 ### 2.3 Security note
@@ -266,7 +275,7 @@ A robust workflow is:
 ## 7) Practical recommendations for experiments
 
 1. Confirm bit order once per environment.
-2. Set `SPINQ_BITORDER=LSB->MSB` for Triangulum unless you have strong evidence to override it.
+2. Set `SPINQ_BITORDER=MSB->LSB` for Triangulum in this workflow unless you have strong evidence to override it.
 3. Use staged runs `L0 / L01 / FULL` routinely.
 4. Increase `REPEATS_NMR` and keep `COOLDOWN_S` non-zero.
 5. If `FULL` collapses or becomes unstable, try:
