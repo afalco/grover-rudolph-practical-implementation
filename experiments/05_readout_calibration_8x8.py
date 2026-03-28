@@ -25,6 +25,11 @@ OUTDIR = "artifacts"
 def main() -> None:
     ensure_dir(OUTDIR)
 
+    # Convention note:
+    # The calibrated 8x8 confusion matrix is interpreted in the same canonical
+    # state order used throughout this repository:
+    #   ['000', '001', '010', '011', '100', '101', '110', '111']
+    # i.e. the effective comparison convention is MSB for both simulator and hardware.
     M = calibrate_readout_matrix_8x8(shots=SHOTS_RO, base_name="RO_FULL")
     cond = float(np.linalg.cond(M))
     print("Done. Condition number:", cond)
