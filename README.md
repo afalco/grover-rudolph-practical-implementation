@@ -220,6 +220,87 @@ export SPINQ_BITORDER=LSB->MSB
 
 This ensures that hardware outputs are mapped consistently to the canonical ordering used everywhere else in the repository.
 
+
+
+## Triangulum connection parameters
+
+When running hardware experiments on the SpinQ Triangulum backend, the connection
+parameters are typically provided through environment variables so that scripts do
+not need to hard-code credentials.
+
+The most common parameters are:
+
+- `SPINQ_IP`
+- `SPINQ_PORT`
+- `SPINQ_ACCOUNT`
+- `SPINQ_PASSWORD`
+
+Depending on the script or backend wrapper, these may be read directly from the
+environment or passed as command-line arguments after being defined.
+
+### Bash / zsh
+
+In Bash, zsh, or a similar Unix shell, define them as:
+
+```bash
+export SPINQ_IP=<TRIANGULUM_IP>
+export SPINQ_PORT=55444
+export SPINQ_ACCOUNT=<ACCOUNT>
+export SPINQ_PASSWORD=<PASSWORD>
+export SPINQ_BITORDER=LSB->MSB
+```
+
+Example:
+
+```bash
+export SPINQ_IP=192.168.1.25
+export SPINQ_PORT=55444
+export SPINQ_ACCOUNT=my_user
+export SPINQ_PASSWORD='my_secret_password'
+export SPINQ_BITORDER=LSB->MSB
+```
+
+You can then run the hardware workflow in the same shell session.
+
+### PowerShell
+
+In PowerShell, use:
+
+```powershell
+$env:SPINQ_IP = "<TRIANGULUM_IP>"
+$env:SPINQ_PORT = "55444"
+$env:SPINQ_ACCOUNT = "<ACCOUNT>"
+$env:SPINQ_PASSWORD = "<PASSWORD>"
+$env:SPINQ_BITORDER = "LSB->MSB"
+```
+
+Example:
+
+```powershell
+$env:SPINQ_IP = "192.168.1.25"
+$env:SPINQ_PORT = "55444"
+$env:SPINQ_ACCOUNT = "my_user"
+$env:SPINQ_PASSWORD = "my_secret_password"
+$env:SPINQ_BITORDER = "LSB->MSB"
+```
+
+### Temporary vs persistent variables
+
+The commands above define the variables only for the current shell session.
+
+If you want them to persist:
+
+- in Bash/zsh, add the `export ...` lines to `~/.bashrc`, `~/.zshrc`, or the
+  shell startup file you use;
+- in PowerShell, add the `$env:...` assignments to your PowerShell profile if
+  appropriate for your workflow.
+
+### Security note
+
+Avoid committing credentials to the repository or hard-coding them inside Python
+files. Environment variables are preferable for local execution, and a separate
+private credentials file can also be used if your local workflow requires it.
+
 ## Verification utility: bit-order calibration
 
 To verify the backend bit-order convention experimentally, use:
