@@ -95,6 +95,29 @@ A manual spot check is also possible:
 
 and inspect the dominant reported bitstring after canonization.
 
+The measurement is taken on the **raw** backend output: `gr.backends` applies the
+`SPINQ_BITORDER` remap on the way out, which would mask precisely what is being
+measured, so the script neutralises that variable for the duration of the run and
+records its prior value in the report.
+
+The probe is `X` on `q_i` followed by the identity-safe tail (`--no-tail` omits it);
+the tail is there because some NMR backends reject circuits that are too trivial.
+All six possible orderings are distinguished, not only canonical and reversed. The
+script writes `artifacts/bit_order_<backend>_<timestamp>.json` with the three full
+measured distributions, the inferred permutation and the recommended export value,
+so the convention can be deposited as a measured fact rather than an assumption.
+
+Exit status: `0` conclusive, `2` usage or connection error, `3` inconclusive — the
+three probes did not define a permutation, which usually points at readout bias
+(see `experiments/05_readout_calibration_8x8.py`) rather than at the bit order.
+
+Note that `SIMULATOR_ORDER` and `HARDWARE_ORDER` in `gr_triangulum_smoke_test.py`
+are a separate mechanism from `SPINQ_BITORDER`: the standalone smoke test uses the
+constants, everything under `gr/` uses the environment variable. With both at `MSB`
+the two agree, since `MSB->LSB` is the identity permutation — but they must be kept
+consistent if this calibration ever returns anything else.
+
+
 ---
 
 ## 2) Triangulum connection parameters

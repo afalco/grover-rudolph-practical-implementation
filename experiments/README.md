@@ -122,6 +122,16 @@ Best first diagnostic to see at which depth performance degrades.
 
 Calibrates the `8×8` readout confusion matrix `Mfull`.
 
+Run it from the repository root, either way:
+
+```bash
+python experiments/05_readout_calibration_8x8.py
+python -m experiments.05_readout_calibration_8x8
+```
+
+It is hardware-only (`RUN_NMR = True`) and takes `SHOTS_RO = 4096`; both are
+constants at the top of the file. Requires the `SPINQ_*` environment variables.
+
 Saves timestamped artifacts such as:
 
 - `artifacts/Mfull_<timestamp>.npy`
@@ -130,6 +140,8 @@ Saves timestamped artifacts such as:
 The matrix is indexed in the same canonical state order used across the repo.
 
 ### `06_readout_mitigation_apply.py`
+
+Run it the same two ways, from the repository root.
 
 Loads a saved `Mfull` and applies readout mitigation:
 
@@ -326,3 +338,99 @@ Expected (NMR):
 - mitigation may slightly help or may not, depending on drift and `Mfull`.
 
 Tip: prefer averaging across repeats and reporting mean ± std from the CSV.
+
+---
+
+## `10_ladder_ab_campaign.py` — interleaved ladder A/B campaign
+
+Produces a run-level dataset for the three-configuration study of Section 9 of the
+manuscript, on a locally operated Triangulum unit.
+
+### Configurations
+
+| name | circuit | calibration |
+|---|---|---|
+| `control` | compiled FULL circuit as published — 21 gates (11 `Ry`, 8 `CX`, 2 `X`), including the `Ry(0)` placeholders and the identity-safe tail | stock |
+| `exp1` | identity-equivalent gates removed — 18 gates (8 `Ry`, 8 `CX`, 2 `X`) | stock |
+
+`exp1` drops exactly two kinds of gate: the identity-safe tail `Ry(+eps) Ry(-eps)`
+on `q0`, and any `Ry` whose commanded angle is zero (for D1 ladder A the level-2
+coefficients are `[90, 5.63, 0, 13.84]` degrees, so one `Ry` goes). The CNOT ladder
+is untouched. Logical equivalence is not assumed: every variant is simulated
+against the analytic target before a single hardware job is submitted, and the
+script exits rather than run if any variant fails.
+
+**Experiment 2 of the study — the globally optimised pulse set — is not reachable
+from this SDK surface and is not attempted here.** Check whether your installation
+exposes pulse-level control with:
+
+```bash
+python -c "import spinqit, pkgutil; print([m.name for m in pkgutil.iter_modules(spinqit.__path__)])"
+```
+
+### Design
+
+Ladders are **interleaved**, not blocked, and the within-repeat order alternates, so
+each (config, ladder) cell has the same mean position in the session. This is the
+confound that the campaign-v2 design could not avoid and that a 10-run blocked study
+cannot control at all.
+
+The **shot count is recorded in every row** — the one field missing from both the
+campaign-v2 run record and the instrument job database.
+
+### Usage
+
+```bash
+export SPINQ_IP=... SPINQ_PORT=55444 SPINQ_USER=... SPINQ_PASS=...
+export SPINQ_BITORDER=MSB->LSB          # validate first with calibrate_bit_order.py
+
+# dry run — validates circuits and prints the schedule, no hardware
+python experiments/10_ladder_ab_campaign.py --backend sim --repeats 2
+
+# campaign: 25 repeats x 2 configs x 2 ladders = 100 runs, ~3.5 h
+python experiments/10_ladder_ab_campaign.py \
+    --backend nmr --repeats 25 --shots 2048 \
+    --unit-label "triangulum-ceu" --outdir artifacts/ladder_ab
+```
+
+Ctrl-C is safe: progress is flushed to JSONL after every run and rerunning the same
+command resumes.
+
+### PowerShell
+
+Same thing on Windows. The quotes around the bit-order value are required: unquoted,
+PowerShell reads `>` as redirection and silently creates a file called `LSB`.
+
+```powershell
+$env:SPINQ_IP    = "<ip>"
+$env:SPINQ_PORT  = "55444"
+$env:SPINQ_USER  = "<account>"
+$env:SPINQ_PASS  = "<password>"
+$env:SPINQ_BITORDER = "MSB->LSB"
+
+# dry run
+python experiments\10_ladder_ab_campaign.py --backend sim --repeats 2
+
+# campaign (backtick continues the line)
+python experiments\10_ladder_ab_campaign.py `
+    --backend nmr --repeats 25 --shots 2048 `
+    --unit-label "triangulum-ceu" --outdir artifacts/ladder_ab
+```
+
+To keep the bit order across sessions instead of re-exporting it every time:
+
+```powershell
+[Environment]::SetEnvironmentVariable("SPINQ_BITORDER", "MSB->LSB", "User")
+```
+
+Do not persist the credentials this way.
+
+### Output
+
+`artifacts/ladder_ab/D1_ladder_ab_runs.{jsonl,csv}`. The CSV reproduces the column
+order of `runs_flat_v2.csv` exactly, then appends `config`, `shots`, `backend`,
+`unit_label`, `n_gates`, `n_ry`, `n_cx`, `n_x`, `started_utc`, `finished_utc` — so the
+scripts in `gr-triangulum-verification` read it without modification.
+
+Export the instrument job database after the session as well, so the campaign has a
+device-side record from the start.

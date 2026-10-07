@@ -338,6 +338,10 @@ python calibrate_bit_order.py \
 ```
 
 This utility runs simple calibration circuits with known `X` flips and reports the effective measurement bit-order of the backend.
+It measures the raw backend output, distinguishes all six possible orderings,
+prints the exact `export SPINQ_BITORDER=...` line to use, and writes a JSON
+report under `--outdir` so the convention can be deposited as a measured fact.
+See `docs/HARDWARE_TRIANGULUM.md` §1.3 for the details and exit codes.
 
 ## Notes
 

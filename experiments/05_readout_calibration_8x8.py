@@ -14,7 +14,14 @@ import numpy as np
 
 from gr import calibrate_readout_matrix_8x8
 
-from .utils_io import ensure_dir, save_matrix, timestamp
+# utils_io lives next to this file. Support both invocation styles:
+#   python -m experiments.05_readout_calibration_8x8      (package-relative)
+#   python experiments/05_readout_calibration_8x8.py              (plain script)
+try:
+    from .utils_io import ensure_dir, save_matrix, timestamp
+except ImportError:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from utils_io import ensure_dir, save_matrix, timestamp
 
 RUN_NMR = True  # this script is hardware-only
 SHOTS_RO = 4096

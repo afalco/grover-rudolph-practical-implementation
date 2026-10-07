@@ -22,7 +22,14 @@ from gr import (
     mitigate_readout,
 )
 
-from .utils_io import load_matrix
+# utils_io lives next to this file. Support both invocation styles:
+#   python -m experiments.06_readout_mitigation_apply      (package-relative)
+#   python experiments/06_readout_mitigation_apply.py              (plain script)
+try:
+    from .utils_io import load_matrix
+except ImportError:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from utils_io import load_matrix
 
 PROB8 = [1, 2, 3, 4, 4, 3, 2, 1]
 LADDER = "B"
